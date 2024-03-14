@@ -1,0 +1,54 @@
+{
+    "model_name": "classificator0",
+    "model_params": {
+        "input_layer_params": {
+            "input_dim": 0,
+            "ff_dim": 256,
+            "model_input_dim": 128,
+            "dropout_p": 0.1
+        },
+        "conv1d_layers_params": {
+            "output_dim": 1,
+            "layer_params": [
+                [
+                    "residual_block",
+                    {
+                        "layer_params": [
+                            [ "conv1d", { "in_channels": 128, "out_channels": 256, "padding": "same", "kernel_size": 5 } ],
+                            [ "conv1d", { "in_channels": 256, "out_channels": 128, "padding": "same", "kernel_size": 3 } ],
+                            [ "batch_norm", { "num_features": 128 }],
+                            [ "relu", {} ]
+                        ]
+                    }
+                ],
+                [ "conv1d", { "in_channels": 128, "out_channels": 128, "kernel_size": 5 } ],
+                [ "batch_norm", { "num_features": 128 }],
+                [ "max_pool", { "kernel_size": 2 } ],
+                [ "dropout", { "p": 0.3 } ],
+                
+                [
+                    "residual_block",
+                    {
+                        "layer_params": [
+                            [ "conv1d", { "in_channels": 128, "out_channels": 256, "padding": "same", "kernel_size": 5 } ],
+                            [ "conv1d", { "in_channels": 256, "out_channels": 128, "padding": "same", "kernel_size": 3 } ],
+                            [ "batch_norm", { "num_features": 128 }],
+                            [ "relu", {} ]
+                        ]
+                    }
+                ],
+                [ "conv1d", { "in_channels": 128, "out_channels": 64, "kernel_size": 5 } ],
+                [ "batch_norm", { "num_features": 64 }],
+                [ "max_pool", { "kernel_size": 2 } ],
+                [ "dropout", { "p": 0.2 } ]
+            ]
+        },
+        "classification_head_params": {
+            "dropout_p": 0.1,
+            "ff_dim": 256
+        }
+    },
+    "optimizer_params": {
+        "lr": 0.0002
+    }
+}

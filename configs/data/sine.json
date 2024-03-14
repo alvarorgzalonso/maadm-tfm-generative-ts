@@ -1,0 +1,12 @@
+{
+    "dataset_config": {
+                        "len": 1000,
+                        "dim": 5,
+                        "seq_len": 100
+                      },
+    "collator_config": {
+                            "batch_size": 32,
+                            "num_workers": 4,
+                            "pin_memory": true
+                        }
+}
