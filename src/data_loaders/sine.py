@@ -11,7 +11,7 @@ class SineDataset(Dataset):
     A custom dataset class for generatin sine function data.
 
     Args:
-        len (int): the number of samples.
+        len_dataset (int): the number of samples.
         dim (int): feature dimensions
 
     Attributes:
@@ -22,12 +22,12 @@ class SineDataset(Dataset):
         __getitem__(index): Returns the data item at the specified index.
     """
   
-    def __init__(self, len, dim, seq_len):
+    def __init__(self, len_dataset, dim, seq_len):
         """
         Initializes a new instance of the SineDataset class.
         """
         self.data = list()
-        self.len = len
+        self.len = len_dataset
         self.dim = dim
         self.seq_len = seq_len
 

@@ -71,7 +71,6 @@ def run(config: dict, initial_classifier: nn.Module=None):
         negative_ratio=(1. / data_module.get_positive_ratio()),
     )
     trainer = pl.Trainer(**trainer_args)
-    exit()
     trainer.fit(classification_module, data_module)
 
 
@@ -143,7 +142,6 @@ if __name__ == "__main__":
             "enable_checkpointing": True,
             "default_root_dir": f"out/{checkpoint_path}",
             "accelerator": "auto",#"cuda",
-            "devices": [2]
     }
         
     run(configs)
