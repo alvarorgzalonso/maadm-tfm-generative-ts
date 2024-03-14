@@ -34,7 +34,7 @@ def run(config: dict, initial_classifier: nn.Module=None):
 
     print("Building data module...")
     if "sine" in config["data_configs"]["dataset_name"]:
-        data_module = SineDataModule(config["data_configs"]["dataset_config"], config["data_configs"]["collator_config"])
+        data_module = SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
     else:
         raise ValueError("Invalid data name")
     

@@ -2,3 +2,4 @@ numpy
 pytorch_lightning
 torch
 torchmetrics
+datasets

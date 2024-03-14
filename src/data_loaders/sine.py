@@ -31,7 +31,7 @@ class SineDataset(Dataset):
         self.dim = dim
         self.seq_len = seq_len
 
-        for i in range(len):
+        for i in range(self.len):
             temp = list()
             for k in range(dim):
                 freq = np.random.uniform(0, 0.1)
@@ -89,7 +89,7 @@ class SineCollatorFn:
     Methods:
         __call__(batch): Collates the batch of data items.
     """
-    def __init__(self,**kwargs):
+    def __init__(self):
         """
         Initializes a new instance of the SineCollatorFn class.
         """
@@ -124,7 +124,7 @@ class SineDataModule(pl.LightningDataModule):
     """
 
     @classmethod
-    def get_default_collator_config(cls):
+    def get_default_loader_config(cls):
         return {
             "batch_size": 32,
             "num_workers": 4,
@@ -134,7 +134,7 @@ class SineDataModule(pl.LightningDataModule):
     @classmethod
     def get_default_dataset_config(cls):
         return {
-            "len": 1000,
+            "len_dataset": 1000,
             "dim": 5,
             "seq_len": 100,
         }
@@ -152,23 +152,23 @@ class SineDataModule(pl.LightningDataModule):
         Returns:
             SineDataModule: The data module instance.
         """
-        collator_config = {
+        loader_config = {
             k: v for k, v in config.items()
-            if k in cls.get_default_collator_config()
+            if k in cls.get_default_loader_config()
         }
         dataset_config = {
             k: v for k, v in config.items()
             if k in cls.get_default_dataset_config()
         }
-        return cls(dataset_config, collator_config)
+        return cls(dataset_config, loader_config=loader_config)
 
-    def __init__(self, dataset_config: dict, collator_config: dict = {}):
+    def __init__(self, dataset_config: dict, loader_config: dict = {}, collator_config: dict = {}):
         super().__init__()
 
         # build collator_fn
-        collator_config = {
-            **self.get_default_collator_config(),
-            **collator_config,
+        self.loader_config = {
+            **self.get_default_loader_config(),
+            **loader_config,
         }
         # build loader config
         self.dataset_config = {
@@ -190,7 +190,7 @@ class SineDataModule(pl.LightningDataModule):
         """
         return DataLoader(
             dataset=self.train_dataset,
-            **self.dataset_config,
+            **self.loader_config,
             shuffle=False,
         )
 
@@ -203,7 +203,7 @@ class SineDataModule(pl.LightningDataModule):
         """
         return DataLoader(
             dataset=self.val_dataset,
-            **self.dataset_config,
+            **self.loader_config,
             shuffle=False,
         )
 

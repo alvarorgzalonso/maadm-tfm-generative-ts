@@ -109,7 +109,6 @@ class ClassificationModule(pl.LightningModule):
 
         Args:
             batch (dict): A dictionary containing the input batch data.
-            batch_idx (int): The index of the current batch.
 
         Returns:
             tuple: A tuple containing the loss, logits, and labels.
