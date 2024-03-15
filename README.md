@@ -4,7 +4,7 @@ TFM - Álvaro Rodríguez Alonso
 ## Usage
 
 ```bash
-python scripts/train_classification.py --model-config classificator.json --dataset-config melbourne_pedestrian.json --ckpt-name classificator0.ckpt
+python -W ignore scripts/train_classification.py --model-config classificator_custom0.json --dataset-config melbourne_pedestrian.json --ckpt-name classificator_custom0.ckpt
 ```
 
 ```bash

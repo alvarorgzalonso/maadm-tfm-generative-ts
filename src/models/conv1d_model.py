@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from typing import Literal
 from models.base_model import BaseModel
+from layer_modules.inception_module import InceptionModule
 
 Conv1dModelLayer = Literal[
     "conv1d",
@@ -78,6 +79,8 @@ class Conv1dModelLayerBuilder:
                 return FeedForwardLayer(**params)
             case "residual_block":
                 return ResidualBlock(**params)
+            case "inception_module":
+                return InceptionModule(**params)
             case _:
                 raise ValueError(f"Invalid Conv1dModelLayer name: {name}")
 
