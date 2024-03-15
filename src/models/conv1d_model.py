@@ -34,11 +34,13 @@ class FeedForwardLayer(nn.Module):
 
     def forward(
         self,
-        x,  # (...BATCH_SIZE, SEQ_LEN, IN_CHANNELS)
+        x,  # (...BATCH_SIZE, IN_CHANNELS, SEQ_LEN)
     ):
+        #x = x.transpose(-1, -2)  # (...BATCH_SIZE, SEQ_LEN, OUT_CHANNELS)
         x = self.ff(x)
         x = self.layer_norm(x)
-        return x # (...BATCH_SIZE, SEQ_LEN, OUT_CHANNELS)
+        #x = x.transpose(-1, -2)  # (...BATCH_SIZE, OUT_CHANNELS, SEQ_LEN)
+        return x
 
 
 class ResidualBlock(nn.Module):
@@ -100,9 +102,13 @@ class Conv1dModel(nn.Module):
 
     def forward(
         self,
-        input,  # (...BATCH_SIZE, W_SIZE, NUM_FEATURES)
+        input,  # (...BATCH_SIZE, SEQ_LEN, IN_CHANNELS)
     ):
+        i = 0
         x = input
+        #x = x.transpose(-1, -2)  # (...BATCH_SIZE, SEQ_LEN, IN_CHANNELS)
         for layer in self.layers:
             x = layer(x)
-        return torch.mean(x, dim=-1)  # (...BATCH_SIZE, EMBEDDING_DIM)
+            i += 1
+        x = torch.mean(x, dim=-1)  # (...BATCH_SIZE, OUTPUT_DIM)
+        return x

@@ -14,6 +14,7 @@ sys.path.append(project_src_path)
 
 
 from data_loaders.sine import SineDataModule
+from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
 from trainers.classification_trainer import ClassificationModule
 from layer_modules.classification_head import ModelWithClassificationHead
@@ -35,6 +36,8 @@ def run(config: dict, initial_classifier: nn.Module=None):
     print("Building data module...")
     if "sine" in config["data_configs"]["dataset_name"]:
         data_module = SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
+    if "melbourne_pedestrian" in config["data_configs"]["dataset_name"]:
+        data_module = MelbounePedestrianDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
     else:
         raise ValueError("Invalid data name")
     
@@ -43,9 +46,14 @@ def run(config: dict, initial_classifier: nn.Module=None):
     conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
     classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
     
+    classification_head_params["num_classes"] = data_module.num_classes
+    conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
+
     if initial_classifier is None:
         name = f"conv1d_{model_name}"
         print(f"Building classifier {name}...")
+        input_layer_params["input_dim"] = data_module.n_timepoints
+
         model = ModelBuilder.build(name, conv_model_params)
         model = ModelWithInputLayer(model, **input_layer_params)
         classifier = ModelWithClassificationHead(
@@ -68,6 +76,7 @@ def run(config: dict, initial_classifier: nn.Module=None):
     classification_module = ClassificationModule(
         model=classifier,
         optimizer_config=optimizer_params,
+        num_classes=data_module.num_classes,
         negative_ratio=(1. / data_module.get_positive_ratio()),
     )
     trainer = pl.Trainer(**trainer_args)
@@ -140,7 +149,7 @@ if __name__ == "__main__":
     configs["trainer_args"] = {
             "max_steps": 20000,
             "enable_checkpointing": True,
-            "default_root_dir": f"out/{checkpoint_path}",
+            "default_root_dir": f"out",
             "accelerator": "auto",#"cuda",
     }
         

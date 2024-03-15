@@ -3,13 +3,13 @@ import torch
 from torch import nn
 
 class ModelWithInputLayer(nn.Module):
-    def __init__(self, model, input_dim, ff_dim, model_input_dim, dropout_p=0.1):
+    def __init__(self, model, input_dim, ff_dim, dropout_p=0.1):
         super(ModelWithInputLayer, self).__init__()
         self.ff = nn.Sequential(
             nn.Linear(input_dim, ff_dim),
             nn.Dropout(dropout_p),
             nn.ReLU(),
-            nn.Linear(ff_dim, model_input_dim),
+            nn.Linear(ff_dim, input_dim),
         )
         self.model = model
         self.output_dim = model.output_dim

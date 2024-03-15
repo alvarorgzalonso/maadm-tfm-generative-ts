@@ -35,6 +35,7 @@ class ClassificationModule(pl.LightningModule):
         self,
         model,
         optimizer_config,
+        num_classes,
         negative_ratio,
     ):
         super().__init__()
@@ -43,12 +44,20 @@ class ClassificationModule(pl.LightningModule):
             **optimizer_config,
         }
         self.model = model
-        self.f1_score = torchmetrics.F1Score(task="binary")
 
         # store the parameters for the cross entropy loss
         # this is used to correct possible imbalances in the dataset
-        self.pos_weight = torch.tensor(negative_ratio, requires_grad=False)
-        self.weight = torch.tensor(2.0 / (1. + negative_ratio), requires_grad=False)
+        self.binary = num_classes == 2
+        if self.binary:
+            self.f1_score = torchmetrics.F1Score(task="binary")
+            self.loss_fn = F.binary_cross_entropy_with_logits
+            self.pos_weight = torch.tensor(negative_ratio, requires_grad=False)
+            self.weight = torch.tensor(2.0 / (1. + negative_ratio), requires_grad=False)
+        else: 
+            self.f1_score = torchmetrics.F1Score(task="multiclass", num_classes=num_classes, average='macro')
+            self.loss_fn = torch.nn.BCEWithLogitsLoss()
+        
+        self.num_classes = num_classes
 
     def training_step(self, batch):
         """
@@ -62,8 +71,16 @@ class ClassificationModule(pl.LightningModule):
             dict: A dictionary containing the loss, logits, and labels.
         """
         loss, logits, labels = self._step(batch)
-        probs = torch.sigmoid(logits)
-        f1_score = self.f1_score(probs, labels)
+        if not self.binary:
+            logits = torch.sigmoid(logits)
+            logits = torch.argmax(logits, dim=-1)
+            labels = torch.argmax(labels, dim=-1)
+            f1_score = self.f1_score(logits.squeeze(), labels.squeeze())
+        else:
+            probs = torch.sigmoid(logits)
+            print(f"probs: {probs}\nlabels: {labels}")
+            f1_score = self.f1_score(probs, labels)
+            
         self.log_dict(
             {
                 "train_loss": loss,
@@ -88,8 +105,14 @@ class ClassificationModule(pl.LightningModule):
             dict: A dictionary containing the loss, logits, and labels.
         """
         loss, logits, labels = self._step(batch)
-        probs = torch.sigmoid(logits)
-        f1_score = self.f1_score(probs, labels)
+        if not self.binary:
+            logits = torch.sigmoid(logits)
+            logits = torch.argmax(logits, dim=-1)
+            labels = torch.argmax(labels, dim=-1)
+            f1_score = self.f1_score(logits.squeeze(), labels.squeeze())
+        else:
+            probs = torch.sigmoid(logits)
+            f1_score = self.f1_score(probs, labels)
         self.log_dict(
             {
                 "val_loss": loss,
@@ -113,12 +136,13 @@ class ClassificationModule(pl.LightningModule):
         Returns:
             tuple: A tuple containing the loss, logits, and labels.
         """
-        labels = batch["labels"].float().view(-1, 1)
+        labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, 1)
+        logits = self.model.forward(batch["input"])  # (BATCH_SIZE, 1)
 
-        logits = self.model.forward(batch)  # (BATCH_SIZE, 1)
-        loss = F.binary_cross_entropy_with_logits(
-            logits, labels, pos_weight=self.pos_weight, weight=self.weight,
-        )
+        if self.binary: loss = self.loss_fn(logits, labels, pos_weight=self.pos_weight, weight=self.weight)
+        else:       
+            loss =  self.loss_fn(logits, labels)
+
         return loss, logits, labels
 
     def configure_optimizers(self):

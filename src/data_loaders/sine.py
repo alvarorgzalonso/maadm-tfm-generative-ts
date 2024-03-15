@@ -1,6 +1,4 @@
 import numpy as np
-import os
-import json
 import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
