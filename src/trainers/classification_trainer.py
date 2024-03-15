@@ -45,8 +45,6 @@ class ClassificationModule(pl.LightningModule):
         }
         self.model = model
 
-        # store the parameters for the cross entropy loss
-        # this is used to correct possible imbalances in the dataset
         self.binary = num_classes == 2
         if self.binary:
             self.f1_score = torchmetrics.F1Score(task="binary")
@@ -80,7 +78,7 @@ class ClassificationModule(pl.LightningModule):
             probs = torch.sigmoid(logits)
             print(f"probs: {probs}\nlabels: {labels}")
             f1_score = self.f1_score(probs, labels)
-            
+
         self.log_dict(
             {
                 "train_loss": loss,
