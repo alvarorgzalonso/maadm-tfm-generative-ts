@@ -1,7 +1,7 @@
 {
     "dataset_config": {},
     "loader_config": {
-                        "batch_size": 32,
+                        "batch_size": 6,
                         "num_workers": 4,
                         "pin_memory": true
                     }

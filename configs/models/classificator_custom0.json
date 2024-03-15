@@ -49,6 +49,6 @@
         }
     },
     "optimizer_params": {
-        "lr": 0.00002
+        "lr": 1e-4
     }
 }
