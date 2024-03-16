@@ -1,4 +1,5 @@
-{
+{   
+    "dataset_name": "melbourne_pedestrian",
     "dataset_config": {},
     "loader_config": {
                         "batch_size": 6,

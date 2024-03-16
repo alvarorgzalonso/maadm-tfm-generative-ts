@@ -16,7 +16,14 @@ sys.path.append(project_src_path)
 from data_loaders.sine import SineDataModule
 from models.model_builder import ModelBuilder
 from trainers.gan_trainer import GanModule
+from layer_modules.classification_head import ModelWithClassificationHead
+from layer_modules.input_layer import ModelWithInputLayer
 
+def get_data_module(config: dict):
+    if "sine" in config["data_configs"]["dataset_name"]:
+        return SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
+    else:
+        raise ValueError("Invalid data name")
 
 def run(config: dict, initial_generator: nn.Module=None, initial_discriminator: nn.Module=None):
     """
@@ -29,30 +36,57 @@ def run(config: dict, initial_generator: nn.Module=None, initial_discriminator: 
     Returns:
         Model: The finetuned model.
     """
-    print("Building data module...")
-    if "sine" in config["data_configs"]["dataset_name"]:
-        data_module = SineDataModule(config["data_configs"]["dataset_config"], config["data_configs"]["collator_config"])
-    else:
-        raise ValueError("Invalid data name")
+    ### Set up data module
+    data_module = get_data_module(config)
     
+    ### Set up configuration
     model_name = config["model_configs"]["model_name"]
     
+     ### Build model
     if initial_generator is None:
-        print("Building generator...")
-        model_name = config["model_configs"]["model_params"]["generator"]
-        generator_name = f"conv1d_{model_name}"
-        generator = ModelBuilder.build(f"conv1d_{generator_name}", config["model_configs"]["model_params"]["generator_params"])
+        name = f"conv1d_{model_name}"
+
+        gen_model_params = config["model_configs"]["generator_params"]
+        classification_head_params = gen_model_params["classification_head_params"]
+        input_layer_params = gen_model_params["input_layer_params"]
+        input_layer_params["input_dim"] = data_module.n_timepoints
+
+        model = ModelBuilder.build(name, gen_model_params)
+        model = ModelWithInputLayer(model, **input_layer_params)
+        generator = ModelWithClassificationHead(
+            model,
+            model.output_dim,
+            **classification_head_params,
+        )
     else:
         print("Using initial generator")
         generator = initial_generator
-
+    
+    
     if initial_discriminator is None:
-        print("Building discriminator...")
-        model_name = config["model_configs"]["model_params"]["discriminator"]
-        discriminator_name = f"conv1d_{model_name}"
-        discriminator = ModelBuilder.build(f"conv1d_{discriminator_name}", config["model_configs"]["model_params"]['discriminator_params'])
+        name = f"conv1d_{model_name}"
+
+        disc_model_params = config["model_configs"]["discriminator_params"]
+        classification_head_params = disc_model_params["classification_head_params"]
+        input_layer_params = disc_model_params["input_layer_params"]
+        input_layer_params["input_dim"] = data_module.n_timepoints
+
+        model = ModelBuilder.build(name, disc_model_params)
+        model = ModelWithInputLayer(model, **input_layer_params)
+        discriminator = ModelWithClassificationHead(
+            model,
+            model.output_dim,
+            **classification_head_params,
+        )
     else:
         print("Using initial discriminator")
+        discriminator = initial_discriminator
+    
+    with open(f"out/metadata/{config['model_configs']['ckpt_name']}.json", "w") as file:
+        config["generator"] = str(generator)
+        config["discriminator"] = str(discriminator)
+        json.dump(config, file, indent=4)
+
         discriminator = initial_discriminator
 
     gan_module = GanModule(generator, discriminator, config["model_configs"]["optimizer_config"])

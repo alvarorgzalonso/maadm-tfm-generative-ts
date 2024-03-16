@@ -1,4 +1,5 @@
 {
+    "dataset_name": "sine",
     "dataset_config": {
                         "len_dataset": 1000,
                         "dim": 5,

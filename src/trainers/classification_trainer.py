@@ -73,7 +73,7 @@ class ClassificationModule(pl.LightningModule):
             logits = torch.sigmoid(logits)
             logits = torch.argmax(logits, dim=-1)
             labels = torch.argmax(labels, dim=-1)
-            f1_score = self.f1_score(logits.squeeze(), labels.squeeze())
+            f1_score = self.f1_score(logits, labels)
         else:
             probs = torch.sigmoid(logits)
             print(f"probs: {probs}\nlabels: {labels}")
@@ -104,10 +104,10 @@ class ClassificationModule(pl.LightningModule):
         """
         loss, logits, labels = self._step(batch)
         if not self.binary:
-            logits = torch.sigmoid(logits)
+            logits = torch.sigmoid(logits) # (BATCH_SIZE, num_classes) probs
             logits = torch.argmax(logits, dim=-1)
             labels = torch.argmax(labels, dim=-1)
-            f1_score = self.f1_score(logits.squeeze(), labels.squeeze())
+            f1_score = self.f1_score(logits, labels)
         else:
             probs = torch.sigmoid(logits)
             f1_score = self.f1_score(probs, labels)
@@ -134,7 +134,7 @@ class ClassificationModule(pl.LightningModule):
         Returns:
             tuple: A tuple containing the loss, logits, and labels.
         """
-        labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, 1)
+        labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
         logits = self.model.forward(batch["input"])  # (BATCH_SIZE, 1)
 
         if self.binary: loss = self.loss_fn(logits, labels, pos_weight=self.pos_weight, weight=self.weight)

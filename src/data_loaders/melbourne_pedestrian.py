@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from fastai.data.external import untar_data
+import pprint
 
 from sklearn.preprocessing import OneHotEncoder
 
@@ -21,7 +22,7 @@ class MelbounePedestrianDataset(Dataset):
             data_path = test_data
 
         train_df = pd.read_csv(data_path, sep='  ', header=None)
-        #train_df[0] = train_df[0] - 1
+        train_df[0] = train_df[0] - 1
 
         n_samples = train_df.shape[0]
         self.n_channels = 1
@@ -63,7 +64,7 @@ class MelbounePedestriancollatorFn:
         X = torch.stack(X)
         y = torch.tensor(y)
         if self.vocab:
-            y = torch.tensor([self.vocab[int(i)] for i in y])
+            y = torch.tensor([self.vocab[i.item()] for i in y])
         return {"input": X, "label": y}
     
     

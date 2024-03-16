@@ -16,9 +16,11 @@ sys.path.append(project_src_path)
 from data_loaders.sine import SineDataModule
 from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
+from models.inceptiontime import InceptionTime
 from trainers.classification_trainer import ClassificationModule
 from layer_modules.classification_head import ModelWithClassificationHead
 from layer_modules.input_layer import ModelWithInputLayer
+
 
 
 def get_data_module(config: dict):
@@ -30,15 +32,13 @@ def get_data_module(config: dict):
     Returns:
         DataModule: The data module.
     """
-    if "sine" in config["data_configs"]["dataset_name"]:
-        return SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
-    if "melbourne_pedestrian" in config["data_configs"]["dataset_name"]:
-        return MelbounePedestrianDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
+    if "melbourne_pedestrian" in config["dataset_name"]:
+        return MelbounePedestrianDataModule(config["dataset_config"], loader_config=config["loader_config"])
     else:
         raise ValueError("Invalid data name")
     
 
-def run(config: dict, initial_classifier: nn.Module=None):
+def run(config: dict, data_module, initial_classifier: nn.Module=None):
     """
     Train the model
     Args:
@@ -49,8 +49,6 @@ def run(config: dict, initial_classifier: nn.Module=None):
     Returns:
         Model: The finetuned model.
     """
-    ### Set up data module
-    data_module = get_data_module(config)
     
     ### Set up configuration
     model_name = config["model_configs"]["model_name"]
@@ -152,21 +150,21 @@ if __name__ == "__main__":
         raise ValueError(f"Please provide a path to the model configuration file.\n{config_file_model} not found.")
     if not os.path.exists(config_file_data):
         raise ValueError(f"Please provide a path to the dataset configuration file.\n{config_file_data} not found.")
-    
+
+    data_module = get_data_module(parse_config(config_file_data))
+
     configs = {}
     configs['model_configs'] = parse_config(config_file_model)
-    configs['data_configs'] = parse_config(config_file_data)
-    configs['model_configs']['ckpt_name'] = args.ckpt_name.replace(".ckpt", "")
-    configs['data_configs']['dataset_name'] = args.dataset_config
-    
+    configs['model_configs']['ckpt_name'] = args.ckpt_name.replace(".ckpt", "")    
     configs["trainer_args"] = {
             "max_steps": 20000,
             "enable_checkpointing": True,
             "default_root_dir": f"out",
             "accelerator": "auto",#"cuda",
     }
-        
-    run(configs)
+    #classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
+    classifier = None
+    run(configs, data_module, classifier)
     
     
 
