@@ -21,6 +21,23 @@ from layer_modules.classification_head import ModelWithClassificationHead
 from layer_modules.input_layer import ModelWithInputLayer
 
 
+def get_data_module(config: dict):
+    """
+    Get the data module
+    Args:
+        config (dict): The configuration dictionary containing various parameters.
+
+    Returns:
+        DataModule: The data module.
+    """
+    if "sine" in config["data_configs"]["dataset_name"]:
+        return SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
+    if "melbourne_pedestrian" in config["data_configs"]["dataset_name"]:
+        return MelbounePedestrianDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
+    else:
+        raise ValueError("Invalid data name")
+    
+
 def run(config: dict, initial_classifier: nn.Module=None):
     """
     Train the model
@@ -32,14 +49,8 @@ def run(config: dict, initial_classifier: nn.Module=None):
     Returns:
         Model: The finetuned model.
     """
-
-    print("Building data module...")
-    if "sine" in config["data_configs"]["dataset_name"]:
-        data_module = SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
-    if "melbourne_pedestrian" in config["data_configs"]["dataset_name"]:
-        data_module = MelbounePedestrianDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
-    else:
-        raise ValueError("Invalid data name")
+    ### Set up data module
+    data_module = get_data_module(config)
     
     ### Set up configuration
     model_name = config["model_configs"]["model_name"]
@@ -136,6 +147,7 @@ if __name__ == "__main__":
 
     config_file_model = os.path.join('configs', 'models', args.model_config)
     config_file_data = os.path.join('configs', 'data', args.dataset_config)
+    
     if not os.path.exists(config_file_model):
         raise ValueError(f"Please provide a path to the model configuration file.\n{config_file_model} not found.")
     if not os.path.exists(config_file_data):

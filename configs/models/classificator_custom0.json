@@ -4,7 +4,8 @@
         "input_layer_params": {
             "input_dim": -1,
             "ff_dim": 256,
-            "dropout_p": 0.1
+            "dropout_p": 0.1,
+            "enable_ff": false
         },
         "conv1d_layers_params": {
             "output_dim": 1,
