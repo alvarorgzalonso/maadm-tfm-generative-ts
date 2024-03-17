@@ -142,8 +142,7 @@ class MelbounePedestrianDataModule(pl.LightningDataModule):
         one_hot_labels = self.one_hot_encoder.fit_transform(np.array(self.train_dataset.uniqiue_labels).reshape(-1, 1))
 
         collator_config["vocab"] = {v: one_hot_labels[i] for i, v in enumerate(self.train_dataset.uniqiue_labels)}
-        #collator_config["vocab"] = {"".join(str(one_hot_labels[i])): v for i, v in enumerate(self.train_dataset.uniqiue_labels)}
-        
+                
         # build collator_fn
         self.loader_config = {
             **self.get_default_loader_config(),

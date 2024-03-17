@@ -100,9 +100,9 @@
                 ["batch_norm", {"num_features": -1}],
                 ["relu", {}]
             ]   
-        },
-        "optimizer_params": {
-            "lr": 1e-4
         }
+    },
+    "optimizer_params": {
+        "lr": 3e-3
     }
 }

@@ -1,10 +1,13 @@
 import torch
+import os
 import pytorch_lightning as pl
 import torchmetrics
 
 from torch.nn import functional as F
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from typing import Sequence
+
+from callbacks.metrics_logger import MetricsLogger
 
 
 class ClassificationModule(pl.LightningModule):
@@ -37,12 +40,16 @@ class ClassificationModule(pl.LightningModule):
         optimizer_config,
         num_classes,
         negative_ratio,
+        logs_dir: str = os.path.join("out", "classificator"),
     ):
         super().__init__()
         self.optimizer_config = {
             **self.get_default_optimizer_config(),
             **optimizer_config,
         }
+        self.logs_dir = logs_dir
+        if not os.path.exists(self.logs_dir): os.makedirs(self.logs_dir)
+
         self.model = model
 
         self.binary = num_classes == 2
@@ -71,8 +78,8 @@ class ClassificationModule(pl.LightningModule):
         loss, logits, labels = self._step(batch)
         if not self.binary:
             logits = torch.sigmoid(logits)
-            logits = torch.argmax(logits, dim=-1)
-            labels = torch.argmax(labels, dim=-1)
+            logits = logits.argmax(dim=1)
+            labels = labels.argmax(dim=1)
             f1_score = self.f1_score(logits, labels)
         else:
             probs = torch.sigmoid(logits)
@@ -105,8 +112,8 @@ class ClassificationModule(pl.LightningModule):
         loss, logits, labels = self._step(batch)
         if not self.binary:
             logits = torch.sigmoid(logits) # (BATCH_SIZE, num_classes) probs
-            logits = torch.argmax(logits, dim=-1)
-            labels = torch.argmax(labels, dim=-1)
+            logits = logits.argmax(dim=1)
+            labels = labels.argmax(dim=1)
             f1_score = self.f1_score(logits, labels)
         else:
             probs = torch.sigmoid(logits)
@@ -172,20 +179,23 @@ class ClassificationModule(pl.LightningModule):
         * ModelCheckpoint: saves the model with the best validation f1 score.
         * EarlyStopping: stops training if the validation f1 score does not improve for 10 epochs.
         * LearningRateMonitor: logs the learning rate at each step.
+        * MetricsLogger: logs the training metrics and classification report at the end of training.
 
         Returns:
             A list of callbacks for the classification trainer.
         """
         return super().configure_callbacks() + [
             ModelCheckpoint(
+                dirpath=os.path.join(self.logs_dir, "ckpts"),
                 filename="{epoch}-{val_f1_score:.2f}",
                 monitor="val_f1_score",
                 mode="max",
             ),
             EarlyStopping(
                 monitor="val_f1_score",
-                patience=15,
+                patience=33,
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
+            MetricsLogger(metrics_path=os.path.join(self.logs_dir, "metadata", "training_metrics.csv"), report_path=os.path.join(self.logs_dir, "metadata", "classification_report.txt")),
         ]

@@ -76,7 +76,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         print("Using initial generator")
         classifier = initial_classifier
     
-    with open(f"out/metadata/{config['model_configs']['ckpt_name']}.json", "w") as file:
+    with open(os.path.join("out", f"{config['model_configs']['ckpt_name']}", "metadata", f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
         config["model"] = str(classifier)
         json.dump(config, file, indent=4)
 
@@ -88,6 +88,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         optimizer_config=optimizer_params,
         num_classes=data_module.num_classes,
         negative_ratio=(1. / data_module.get_positive_ratio()),
+        logs_dir=os.path.join('out', f"{config['model_configs']['ckpt_name']}"),
     )
     trainer = pl.Trainer(**trainer_args)
     trainer.fit(classification_module, data_module)
@@ -136,8 +137,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    out_metadata_dir = os.path.join('out', 'metadata')
-    checkpoint_path = os.path.join('out', 'ckpt')
+    out_metadata_dir = os.path.join('out', args.ckpt_name.replace(".ckpt", ""), 'metadata')
+    checkpoint_path = os.path.join('out',args.ckpt_name.replace(".ckpt", ""), 'ckpts')
     if not os.path.exists(out_metadata_dir):
         os.makedirs(out_metadata_dir)
     if not os.path.exists(checkpoint_path):
@@ -162,8 +163,8 @@ if __name__ == "__main__":
             "default_root_dir": f"out",
             "accelerator": "auto",#"cuda",
     }
-    #classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
-    classifier = None
+    classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
+    #classifier = None
     run(configs, data_module, classifier)
     
     
