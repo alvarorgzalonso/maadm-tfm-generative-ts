@@ -26,6 +26,7 @@ class MetricsLogger(Callback):
         all_labels = []
         for batch in trainer.datamodule.val_dataloader():
             inputs, labels = batch["input"], batch["label"]
+            inputs, labels = inputs.cuda(), labels.cuda()
             labels = batch["label"].float().view(-1, trainer.datamodule.num_classes)  # (BATCH_SIZE, num_classes)
             outputs = pl_module.model(inputs)
             preds = outputs.argmax(dim=1)
