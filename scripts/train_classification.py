@@ -52,17 +52,19 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     
     ### Set up configuration
     model_name = config["model_configs"]["model_name"]
-    input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
-    conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
-    classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
-    
-    classification_head_params["num_classes"] = data_module.num_classes
-    conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
 
     ### Build model
     if initial_classifier is None:
+        input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
+        conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
+        classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
+        
+        classification_head_params["num_classes"] = data_module.num_classes
+        conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
+
         name = f"conv1d_{model_name}"
         print(f"Building classifier {name}...")
+        
         input_layer_params["input_dim"] = data_module.n_timepoints
 
         model = ModelBuilder.build(name, conv_model_params)
