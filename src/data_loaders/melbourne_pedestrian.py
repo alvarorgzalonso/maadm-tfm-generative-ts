@@ -142,7 +142,7 @@ class MelbounePedestrianDataModule(pl.LightningDataModule):
         one_hot_labels = self.one_hot_encoder.fit_transform(np.array(self.train_dataset.uniqiue_labels).reshape(-1, 1))
 
         collator_config["vocab"] = {v: one_hot_labels[i] for i, v in enumerate(self.train_dataset.uniqiue_labels)}
-                
+
         # build collator_fn
         self.loader_config = {
             **self.get_default_loader_config(),
@@ -155,13 +155,13 @@ class MelbounePedestrianDataModule(pl.LightningDataModule):
         return DataLoader(
             dataset=self.train_dataset,
             **self.loader_config,
-            shuffle=False,
+            shuffle=True,
         )
     def val_dataloader(self):
         return DataLoader(
             dataset=self.val_dataset,
             **self.loader_config,
-            shuffle=False,
+            shuffle=True,
         )
     
     def get_positive_ratio(self):

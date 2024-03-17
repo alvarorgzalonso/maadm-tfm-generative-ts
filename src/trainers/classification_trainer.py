@@ -2,6 +2,7 @@ import torch
 import os
 import pytorch_lightning as pl
 import torchmetrics
+import numpy as np
 
 from torch.nn import functional as F
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping, LearningRateMonitor
@@ -83,7 +84,6 @@ class ClassificationModule(pl.LightningModule):
             f1_score = self.f1_score(logits, labels)
         else:
             probs = torch.sigmoid(logits)
-            print(f"probs: {probs}\nlabels: {labels}")
             f1_score = self.f1_score(probs, labels)
 
         self.log_dict(
@@ -111,20 +111,21 @@ class ClassificationModule(pl.LightningModule):
         """
         loss, logits, labels = self._step(batch)
         if not self.binary:
-            logits = torch.sigmoid(logits) # (BATCH_SIZE, num_classes) probs
-            logits = logits.argmax(dim=1)
-            labels = labels.argmax(dim=1)
-            f1_score = self.f1_score(logits, labels)
-        else:
             probs = torch.sigmoid(logits)
-            f1_score = self.f1_score(probs, labels)
+            prediction = probs.argmax(dim=1)
+            labels = labels.argmax(dim=1)
+            f1_score = self.f1_score(prediction, labels)
+        else:
+            prediction = torch.sigmoid(logits)
+            f1_score = self.f1_score(prediction, labels)
+
         self.log_dict(
             {
                 "val_loss": loss,
                 "val_f1_score": f1_score,
             },
             on_epoch=True,
-            on_step=False,
+            on_step=True,
             prog_bar=True,
             batch_size=labels.nelement(),
         )
@@ -193,7 +194,7 @@ class ClassificationModule(pl.LightningModule):
             ),
             EarlyStopping(
                 monitor="val_f1_score",
-                patience=33,
+                patience=20,
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
