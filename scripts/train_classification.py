@@ -77,7 +77,6 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
 
     trainer_args = config["trainer_args"]
     logger = pl_loggers.TensorBoardLogger(out_dir)
-    trainer_args["logger"] = logger
 
     if not os.path.exists(logger.log_dir): os.makedirs(logger.log_dir)
     
@@ -94,7 +93,8 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         logs_dir=logger.log_dir,
         ckpts_dir=os.path.join(logger.log_dir, "ckpts"),
     )
-
+    
+    trainer_args["logger"] = logger
     trainer = pl.Trainer(**trainer_args)
     trainer.fit(classification_module, data_module)
 
