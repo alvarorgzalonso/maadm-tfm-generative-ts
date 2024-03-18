@@ -1,12 +1,11 @@
 import pandas as pd
 from pytorch_lightning.callbacks import Callback
 from sklearn.metrics import classification_report, confusion_matrix
-import torch
 
 class MetricsLogger(Callback):
-    def __init__(self, metrics_path="metrics_logger.csv", report_path="classification_report.txt"):
-        self.metrics_path = metrics_path
-        self.report_path = report_path
+    def __init__(self, metrics_file_path="metrics_logger.csv", report_file_path="classification_report.txt"):
+        self.metrics_file_path = metrics_file_path
+        self.report_file_path = report_file_path
         self.metrics = []
 
     def on_epoch_end(self, trainer, pl_module):
@@ -19,9 +18,10 @@ class MetricsLogger(Callback):
             "val_f1_score": metrics.get("val_f1_score_epoch").item(),
         }
         self.metrics.append(epoch_metrics)
-        pd.DataFrame(self.metrics).to_csv(self.metrics_path, index=False)
 
     def on_train_end(self, trainer, pl_module):
+        print(f"Logging metrics to file: {self.metrics_file_path}")
+        pd.DataFrame(self.metrics).to_csv(self.metrics_file_path, index=False)
         all_preds = []
         all_labels = []
         for batch in trainer.datamodule.val_dataloader():
@@ -37,7 +37,7 @@ class MetricsLogger(Callback):
         report = classification_report(all_labels, all_preds)
         conf_matrix = confusion_matrix(all_labels, all_preds)
 
-        with open(self.report_path, "w") as f:
+        with open(self.report_file_path, "w") as f:
             f.write(report)
             f.write("\nConfusion Matrix:\n")
             f.write(str(conf_matrix))
