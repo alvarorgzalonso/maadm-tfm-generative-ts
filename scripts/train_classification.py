@@ -75,9 +75,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         print("Using initial generator")
         classifier = initial_classifier
 
-    
-
-    
+    trainer_args = config["trainer_args"]
     logger = pl_loggers.TensorBoardLogger(out_dir)
     trainer_args["logger"] = logger
     
@@ -95,7 +93,6 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         ckpts_dir=os.path.join(logger.log_dir, "ckpts"),
     )
 
-    trainer_args = config["trainer_args"]
     trainer = pl.Trainer(**trainer_args)
     trainer.fit(classification_module, data_module)
 
