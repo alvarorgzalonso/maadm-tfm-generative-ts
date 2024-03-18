@@ -198,5 +198,5 @@ class ClassificationModule(pl.LightningModule):
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
-            MetricsLogger(metrics_path=os.path.join(self.logs_dir, "metadata", "training_metrics.csv"), report_path=os.path.join(self.logs_dir, "metadata", "classification_report.txt")),
+            MetricsLogger(metrics_file_path=os.path.join(self.logs_dir, "metadata", "training_metrics.csv"), report_file_path=os.path.join(self.logs_dir, "metadata", "classification_report.txt")),
         ]
