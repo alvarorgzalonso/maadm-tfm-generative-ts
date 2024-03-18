@@ -78,6 +78,8 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     trainer_args = config["trainer_args"]
     logger = pl_loggers.TensorBoardLogger(out_dir)
     trainer_args["logger"] = logger
+
+    if not os.path.exists(logger.log_dir): os.makedirs(logger.log_dir)
     
     with open(os.path.join(logger.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
         config["model"] = str(classifier)
@@ -141,8 +143,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     out_dir = os.path.join('out', args.ckpt_name.replace(".ckpt", ""))
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    if not os.path.exists(out_dir): os.makedirs(out_dir)
 
     config_file_model = os.path.join('configs', 'models', args.model_config)
     config_file_data = os.path.join('configs', 'data', args.dataset_config)
