@@ -42,6 +42,7 @@ class ClassificationModule(pl.LightningModule):
         num_classes,
         negative_ratio,
         logs_dir: str = os.path.join("out", "classificator"),
+        ckpts_dir: str = os.path.join("out", "classificator_ckpts"),
     ):
         super().__init__()
         self.optimizer_config = {
@@ -50,6 +51,8 @@ class ClassificationModule(pl.LightningModule):
         }
         self.logs_dir = logs_dir
         if not os.path.exists(self.logs_dir): os.makedirs(self.logs_dir)
+        self.ckpts_dir = ckpts_dir
+        if not os.path.exists(self.ckpts_dir): os.makedirs(self.ckpts_dir)
 
         self.model = model
 
@@ -187,7 +190,7 @@ class ClassificationModule(pl.LightningModule):
         """
         return super().configure_callbacks() + [
             ModelCheckpoint(
-                dirpath=os.path.join(self.logs_dir, "ckpts"),
+                dirpath=self.ckpts_dir,
                 filename="{epoch}-{val_f1_score:.2f}",
                 monitor="val_f1_score",
                 mode="max",
@@ -198,5 +201,5 @@ class ClassificationModule(pl.LightningModule):
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
-            MetricsLogger(metrics_file_path=os.path.join(self.logs_dir, "metadata", "training_metrics.csv"), report_file_path=os.path.join(self.logs_dir, "metadata", "classification_report.txt")),
+            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "classification_report.txt")),
         ]

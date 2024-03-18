@@ -8,20 +8,7 @@ class MetricsLogger(Callback):
         self.report_file_path = report_file_path
         self.metrics = []
 
-    def on_epoch_end(self, trainer, pl_module):
-        metrics = trainer.callback_metrics
-        epoch_metrics = {
-            "epoch": trainer.current_epoch,
-            "train_loss": metrics.get("train_loss_epoch").item(),
-            "val_loss": metrics.get("val_loss_epoch").item(),
-            "train_f1_score": metrics.get("train_f1_score_epoch").item(),
-            "val_f1_score": metrics.get("val_f1_score_epoch").item(),
-        }
-        self.metrics.append(epoch_metrics)
-
     def on_train_end(self, trainer, pl_module):
-        print(f"Logging metrics to file: {self.metrics_file_path}")
-        pd.DataFrame(self.metrics).to_csv(self.metrics_file_path, index=False)
         all_preds = []
         all_labels = []
         for batch in trainer.datamodule.val_dataloader():
