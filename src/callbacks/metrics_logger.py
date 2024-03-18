@@ -4,7 +4,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import torch
 
 class MetricsLogger(Callback):
-    def __init__(self, metrics_path="metrics.csv", report_path="classification_report.txt"):
+    def __init__(self, metrics_path="metrics_logger.csv", report_path="classification_report.txt"):
         self.metrics_path = metrics_path
         self.report_path = report_path
         self.metrics = []
