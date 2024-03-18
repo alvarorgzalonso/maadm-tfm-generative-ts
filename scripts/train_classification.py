@@ -13,7 +13,6 @@ project_src_path = os.path.join(dir_path, "..", "src")
 sys.path.append(project_src_path)
 
 
-from data_loaders.sine import SineDataModule
 from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
 from models.inceptiontime import InceptionTime
@@ -64,7 +63,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
 
         name = f"conv1d_{model_name}"
         print(f"Building classifier {name}...")
-        
+
         input_layer_params["input_dim"] = data_module.n_timepoints
 
         model = ModelBuilder.build(name, conv_model_params)
