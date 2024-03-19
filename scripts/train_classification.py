@@ -168,8 +168,10 @@ if __name__ == "__main__":
             "accelerator": "auto",#"cuda",
     }
     
-    classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
-    #classifier = None
+    if "InceptionTime" in configs['model_configs']['model_name']:
+        classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
+    else:
+        classifier = None
     run(configs, data_module, classifier)
     
     
