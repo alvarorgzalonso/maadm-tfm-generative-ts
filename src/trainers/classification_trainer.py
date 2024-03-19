@@ -197,9 +197,9 @@ class ClassificationModule(pl.LightningModule):
             ),
             EarlyStopping(
                 monitor="val_f1_score",
-                patience=20,
+                patience=2,
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
-            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "metadata", "classification_report.txt")),
+            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "classification_report.txt")),
         ]

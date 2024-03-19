@@ -49,7 +49,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     """
     ### Set up configuration
     model_name = config["model_configs"]["model_name"]
-    out_dir = os.path.join('out', model_name)
+    out_dir = os.path.join('out', config["model_configs"]["ckpt_name"])
 
     ### Build model
     if initial_classifier is None:
@@ -73,14 +73,16 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
             **classification_head_params,
         )
     else:
-        print("Using initial generator")
+        print("Using initial classifier")
         classifier = initial_classifier
 
-    logger = pl_loggers.TensorBoardLogger(out_dir, name='')
-
-    if not os.path.exists(logger.log_dir): os.makedirs(logger.log_dir)
+    logger_tb = pl_loggers.TensorBoardLogger(out_dir, name='')
+    logger_csv = pl_loggers.CSVLogger(out_dir, name='')
+    print(f"Saving to:\nlogger_tb.log_dir: {logger_tb.log_dir}\nlogger_csv.log_dir: {logger_csv.log_dir}")
     
-    with open(os.path.join(logger.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
+    if not os.path.exists(logger_tb.log_dir): os.makedirs(logger_tb.log_dir)
+    
+    with open(os.path.join(logger_tb.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
         config["model"] = str(classifier)
         json.dump(config, file, indent=4)
 
@@ -91,12 +93,12 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         optimizer_config=optimizer_params,
         num_classes=data_module.num_classes,
         negative_ratio=(1. / data_module.get_positive_ratio()),
-        logs_dir=logger.log_dir,
-        ckpts_dir=os.path.join(logger.log_dir, "ckpts"),
+        logs_dir=logger_tb.log_dir,
+        ckpts_dir=os.path.join(logger_tb.log_dir, "ckpts"),
     )
 
     trainer_args = config["trainer_args"]
-    trainer_args["logger"] = logger
+    trainer_args["logger"] = [logger_tb, logger_csv]
     trainer = pl.Trainer(**trainer_args)
     trainer.fit(classification_module, data_module)
 

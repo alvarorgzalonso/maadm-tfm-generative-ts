@@ -9,24 +9,13 @@ class MetricsLogger(Callback):
         self.report_file_path = report_file_path
         self.metrics = []
 
-    def on_epoch_end(self, trainer, pl_module):
-        metrics = trainer.callback_metrics
-        epoch_metrics = {
-            "epoch": trainer.current_epoch,
-            "train_loss": metrics.get("train_loss_epoch").item(),
-            "val_loss": metrics.get("val_loss_epoch").item(),
-            "train_f1_score": metrics.get("train_f1_score_epoch").item(),
-            "val_f1_score": metrics.get("val_f1_score_epoch").item(),
-        }
-        self.metrics.append(epoch_metrics)
-        pd.DataFrame(self.metrics).to_csv(self.metrics_path, index=False)
-
     def on_train_end(self, trainer, pl_module):
         all_preds = []
         all_labels = []
         for batch in trainer.datamodule.val_dataloader():
             inputs, labels = batch["input"], batch["label"]
-            inputs, labels = inputs.cuda(), labels.cuda()
+            #check if cuda is available
+            if torch.cuda.is_available(): inputs, labels = inputs.cuda(), labels.cuda()
             labels = batch["label"].float().view(-1, trainer.datamodule.num_classes)  # (BATCH_SIZE, num_classes)
             outputs = pl_module.model(inputs)
             preds = outputs.argmax(dim=1)
