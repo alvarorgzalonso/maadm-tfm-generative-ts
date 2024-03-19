@@ -3,9 +3,7 @@ import argparse
 import json
 import sys
 import pytorch_lightning as pl
-
-
-from copy import deepcopy
+from lightning.pytorch import loggers as pl_loggers
 from torch import nn
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -49,9 +47,9 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     Returns:
         Model: The finetuned model.
     """
-    
     ### Set up configuration
     model_name = config["model_configs"]["model_name"]
+    out_dir = os.path.join('out', model_name)
 
     ### Build model
     if initial_classifier is None:
@@ -77,12 +75,15 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     else:
         print("Using initial generator")
         classifier = initial_classifier
+
+    logger = pl_loggers.TensorBoardLogger(out_dir, name='')
+
+    if not os.path.exists(logger.log_dir): os.makedirs(logger.log_dir)
     
-    with open(os.path.join("out", f"{config['model_configs']['ckpt_name']}", "metadata", f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
+    with open(os.path.join(logger.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
         config["model"] = str(classifier)
         json.dump(config, file, indent=4)
 
-    trainer_args = config["trainer_args"]
 
     optimizer_params = config["model_configs"]["optimizer_params"]
     classification_module = ClassificationModule(
@@ -90,8 +91,12 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
         optimizer_config=optimizer_params,
         num_classes=data_module.num_classes,
         negative_ratio=(1. / data_module.get_positive_ratio()),
-        logs_dir=os.path.join('out', f"{config['model_configs']['ckpt_name']}"),
+        logs_dir=logger.log_dir,
+        ckpts_dir=os.path.join(logger.log_dir, "ckpts"),
     )
+
+    trainer_args = config["trainer_args"]
+    trainer_args["logger"] = logger
     trainer = pl.Trainer(**trainer_args)
     trainer.fit(classification_module, data_module)
 
@@ -138,13 +143,8 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    out_metadata_dir = os.path.join('out', args.ckpt_name.replace(".ckpt", ""), 'metadata')
-    checkpoint_path = os.path.join('out',args.ckpt_name.replace(".ckpt", ""), 'ckpts')
-    if not os.path.exists(out_metadata_dir):
-        os.makedirs(out_metadata_dir)
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
+    out_dir = os.path.join('out', args.ckpt_name.replace(".ckpt", ""))
+    if not os.path.exists(out_dir): os.makedirs(out_dir)
 
     config_file_model = os.path.join('configs', 'models', args.model_config)
     config_file_data = os.path.join('configs', 'data', args.dataset_config)
@@ -165,6 +165,7 @@ if __name__ == "__main__":
             "default_root_dir": f"out",
             "accelerator": "auto",#"cuda",
     }
+    
     classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
     #classifier = None
     run(configs, data_module, classifier)

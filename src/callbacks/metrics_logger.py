@@ -4,9 +4,9 @@ from sklearn.metrics import classification_report, confusion_matrix
 import torch
 
 class MetricsLogger(Callback):
-    def __init__(self, metrics_path="metrics_logger.csv", report_path="classification_report.txt"):
-        self.metrics_path = metrics_path
-        self.report_path = report_path
+    def __init__(self, metrics_file_path="metrics_logger.csv", report_file_path="classification_report.txt"):
+        self.metrics_file_path = metrics_file_path
+        self.report_file_path = report_file_path
         self.metrics = []
 
     def on_epoch_end(self, trainer, pl_module):
@@ -37,7 +37,7 @@ class MetricsLogger(Callback):
         report = classification_report(all_labels, all_preds)
         conf_matrix = confusion_matrix(all_labels, all_preds)
 
-        with open(self.report_path, "w") as f:
+        with open(self.report_file_path, "w") as f:
             f.write(report)
             f.write("\nConfusion Matrix:\n")
             f.write(str(conf_matrix))
