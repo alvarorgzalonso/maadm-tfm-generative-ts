@@ -5,3 +5,4 @@ torchmetrics
 datasets
 fastai
 lightning
+tensorboard
