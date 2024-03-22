@@ -3,9 +3,7 @@ import argparse
 import json
 import sys
 import pytorch_lightning as pl
-
-
-from copy import deepcopy
+from lightning.pytorch import loggers as pl_loggers
 from torch import nn
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -14,18 +12,31 @@ sys.path.append(project_src_path)
 
 
 from data_loaders.sine import SineDataModule
+from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
-from trainers.gan_trainer import GanModule
+from models.inceptiontime import InceptionTime
+from trainers.classification_trainer import ClassificationModule
 from layer_modules.classification_head import ModelWithClassificationHead
 from layer_modules.input_layer import ModelWithInputLayer
 
+
+
 def get_data_module(config: dict):
-    if "sine" in config["data_configs"]["dataset_name"]:
-        return SineDataModule(config["data_configs"]["dataset_config"], loader_config=config["data_configs"]["loader_config"])
+    """
+    Get the data module
+    Args:
+        config (dict): The configuration dictionary containing various parameters.
+
+    Returns:
+        DataModule: The data module.
+    """
+    if "melbourne_pedestrian" in config["dataset_name"]:
+        return MelbounePedestrianDataModule(config["dataset_config"], loader_config=config["loader_config"])
     else:
         raise ValueError("Invalid data name")
+    
 
-def run(config: dict, initial_generator: nn.Module=None, initial_discriminator: nn.Module=None):
+def run(config: dict, data_module, initial_generator: nn.Module=None, initial_discriminator: nn.Module=None):
     """
     Train the model
     Args:
@@ -36,66 +47,84 @@ def run(config: dict, initial_generator: nn.Module=None, initial_discriminator: 
     Returns:
         Model: The finetuned model.
     """
-    ### Set up data module
-    data_module = get_data_module(config)
-    
     ### Set up configuration
-    model_name = config["model_configs"]["model_name"]
-    
-     ### Build model
+    out_dir = os.path.join('out', config["model_configs"]["ckpt_name"])
+
+    ### Build generator
     if initial_generator is None:
-        name = f"conv1d_{model_name}"
+        generator_name = config["generator_configs"]["model_name"]
 
-        gen_model_params = config["model_configs"]["generator_params"]
-        classification_head_params = gen_model_params["classification_head_params"]
-        input_layer_params = gen_model_params["input_layer_params"]
+        input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
+        conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
+        classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
+        
+        classification_head_params["num_classes"] = data_module.num_classes
+        conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
+
+        name = f"conv1d_{generator_name}"
+        print(f"Building classifier {name}...")
+        
         input_layer_params["input_dim"] = data_module.n_timepoints
 
-        model = ModelBuilder.build(name, gen_model_params)
+        model = ModelBuilder.build(name, conv_model_params)
         model = ModelWithInputLayer(model, **input_layer_params)
-        generator = ModelWithClassificationHead(
-            model,
-            model.output_dim,
-            **classification_head_params,
-        )
     else:
-        print("Using initial generator")
-        generator = initial_generator
-    
-    
+        print("Using initial classifier")
+        classifier = initial_generator
+
+        
+    ### Build discriminator
     if initial_discriminator is None:
-        name = f"conv1d_{model_name}"
+        discriminator_name = config["discriminator_configs"]["model_name"]
 
-        disc_model_params = config["model_configs"]["discriminator_params"]
-        classification_head_params = disc_model_params["classification_head_params"]
-        input_layer_params = disc_model_params["input_layer_params"]
+        input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
+        conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
+        classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
+        
+        classification_head_params["num_classes"] = data_module.num_classes
+        conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
+
+        name = f"conv1d_{discriminator_name}"
+        print(f"Building classifier {name}...")
+        
         input_layer_params["input_dim"] = data_module.n_timepoints
 
-        model = ModelBuilder.build(name, disc_model_params)
+        model = ModelBuilder.build(name, conv_model_params)
         model = ModelWithInputLayer(model, **input_layer_params)
-        discriminator = ModelWithClassificationHead(
+        classifier = ModelWithClassificationHead(
             model,
             model.output_dim,
             **classification_head_params,
         )
     else:
-        print("Using initial discriminator")
-        discriminator = initial_discriminator
+        print("Using initial classifier")
+        classifier = initial_discriminator
+
+    logger_tb = pl_loggers.TensorBoardLogger(out_dir, name='')
+    logger_csv = pl_loggers.CSVLogger(out_dir, name='')
+    print(f"Saving to:\nlogger_tb.log_dir: {logger_tb.log_dir}\nlogger_csv.log_dir: {logger_csv.log_dir}")
     
-    with open(f"out/metadata/{config['model_configs']['ckpt_name']}.json", "w") as file:
-        config["generator"] = str(generator)
-        config["discriminator"] = str(discriminator)
+    if not os.path.exists(logger_tb.log_dir): os.makedirs(logger_tb.log_dir)
+    
+    with open(os.path.join(logger_tb.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
+        config["model"] = str(classifier)
         json.dump(config, file, indent=4)
 
-        discriminator = initial_discriminator
 
-    gan_module = GanModule(generator, discriminator, config["model_configs"]["optimizer_config"])
+    optimizer_params = config["model_configs"]["optimizer_params"]
+    classification_module = ClassificationModule(
+        model=classifier,
+        optimizer_config=optimizer_params,
+        num_classes=data_module.num_classes,
+        negative_ratio=(1. / data_module.get_positive_ratio()),
+        logs_dir=logger_tb.log_dir,
+        ckpts_dir=os.path.join(logger_tb.log_dir, "ckpts"),
+    )
 
-    return None
     trainer_args = config["trainer_args"]
+    trainer_args["logger"] = [logger_tb, logger_csv]
     trainer = pl.Trainer(**trainer_args)
-
-    trainer.fit(gan_module, data_module)
+    trainer.fit(classification_module, data_module)
 
 
 
@@ -117,14 +146,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Trainer generative model for time series generation.",
         epilog=(
-            "This tool trains a GAN or diffusion model to generate time series data by taking original as reference."
+            "This tool trains a GAN model to generate time series data by taking original as reference."
         ),
     )
 
     parser.add_argument(
-        "--model-config",
+        "--generator-config",
         type=str,
-        help="Path to the model configuration file.",
+        help="Path to the generator configuration file.",
+    )
+
+    parser.add_argument(
+        "--discriminator-config",
+        type=str,
+        help="Path to the discriminator configuration file.",
     )
 
     parser.add_argument(
@@ -140,31 +175,35 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    out_dir = os.path.join('out', args.ckpt_name.replace(".ckpt", ""))
+    if not os.path.exists(out_dir): os.makedirs(out_dir)
 
-    out_metadata_dir = os.path.join('out', 'metadata')
-    checkpoint_path = os.path.join('out', 'ckpt')
-    if not os.path.exists(out_metadata_dir):
-        os.makedirs(out_metadata_dir)
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
-
-    config_file_model = os.path.join('configs', 'models', args.model_config)
+    config_file_generator = os.path.join('configs', 'models', args.generator_config)
+    config_file_discriminator = os.path.join('configs', 'models', args.disctiminator_config)
     config_file_data = os.path.join('configs', 'data', args.dataset_config)
-    if not os.path.exists(config_file_model):
-        raise ValueError(f"Please provide a path to the model configuration file.\n{config_file_model} not found.")
+    
+    if not os.path.exists(config_file_generator):
+        raise ValueError(f"Please provide a path to the generator configuration file.\n{config_file_generator} not found.")
+    if not os.path.exists(config_file_discriminator):
+        raise ValueError(f"Please provide a path to the discriminator configuration file.\n{config_file_discriminator} not found.")
     if not os.path.exists(config_file_data):
         raise ValueError(f"Please provide a path to the dataset configuration file.\n{config_file_data} not found.")
-    
+
+    data_module = get_data_module(parse_config(config_file_data))
+
     configs = {}
-    configs['model_configs'] = parse_config(config_file_model)
-    configs['data_configs'] = parse_config(config_file_data)
-    configs['model_configs']['ckpt_name'] = args.ckpt_name.replace(".ckpt", "")
-    configs['data_configs']['dataset_name'] = args.dataset_config
+    configs['generator_configs'] = parse_config(config_file_generator)
+    configs['discriminator_configs'] = parse_config(config_file_discriminator)
+    configs['model_configs']['ckpt_name'] = args.ckpt_name.replace(".ckpt", "")    
+    configs["trainer_args"] = {
+            "max_steps": 20000,
+            "enable_checkpointing": True,
+            "default_root_dir": f"out",
+            "accelerator": "auto",#"cuda",
+    }
     
-    run(configs)
-    
-    
-
-    
-
-    
+    if "InceptionTime" in configs['discriminator_configs']['model_name']:
+        discriminator = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
+    else:
+        discriminator = None
+    run(configs, data_module, initial_discriminator=discriminator)

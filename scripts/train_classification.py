@@ -122,7 +122,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Trainer generative model for time series generation.",
         epilog=(
-            "This tool trains a GAN or diffusion model to generate time series data by taking original as reference."
+            "This tool trains a time series classifier."
         ),
     )
 
