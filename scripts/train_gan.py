@@ -15,7 +15,7 @@ from data_loaders.sine import SineDataModule
 from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
 from models.inceptiontime import InceptionTime
-from trainers.classification_trainer import ClassificationModule
+from trainers.gan_trainer import GANModule
 from layer_modules.classification_head import ModelWithClassificationHead
 from layer_modules.input_layer import ModelWithInputLayer
 
@@ -56,21 +56,19 @@ def run(config: dict, data_module, initial_generator: nn.Module=None, initial_di
 
         input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
         conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
-        classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
-        
-        classification_head_params["num_classes"] = data_module.num_classes
         conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
 
         name = f"conv1d_{generator_name}"
-        print(f"Building classifier {name}...")
+        print(f"Building generator {name}...")
         
         input_layer_params["input_dim"] = data_module.n_timepoints
 
         model = ModelBuilder.build(name, conv_model_params)
         model = ModelWithInputLayer(model, **input_layer_params)
+        #generator = 
     else:
-        print("Using initial classifier")
-        classifier = initial_generator
+        print("Using initial generator")
+        generator = initial_generator
 
         
     ### Build discriminator
@@ -85,20 +83,20 @@ def run(config: dict, data_module, initial_generator: nn.Module=None, initial_di
         conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
 
         name = f"conv1d_{discriminator_name}"
-        print(f"Building classifier {name}...")
+        print(f"Building discriminator {name}...")
         
         input_layer_params["input_dim"] = data_module.n_timepoints
 
         model = ModelBuilder.build(name, conv_model_params)
         model = ModelWithInputLayer(model, **input_layer_params)
-        classifier = ModelWithClassificationHead(
+        discriminator = ModelWithClassificationHead(
             model,
             model.output_dim,
             **classification_head_params,
         )
     else:
-        print("Using initial classifier")
-        classifier = initial_discriminator
+        print("Using initial discriminator")
+        discriminator = initial_discriminator
 
     logger_tb = pl_loggers.TensorBoardLogger(out_dir, name='')
     logger_csv = pl_loggers.CSVLogger(out_dir, name='')
@@ -107,16 +105,17 @@ def run(config: dict, data_module, initial_generator: nn.Module=None, initial_di
     if not os.path.exists(logger_tb.log_dir): os.makedirs(logger_tb.log_dir)
     
     with open(os.path.join(logger_tb.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
-        config["model"] = str(classifier)
+        config["discriminator"] = str(discriminator)
+        config["generator"]  = str(generator)
         json.dump(config, file, indent=4)
 
 
     optimizer_params = config["model_configs"]["optimizer_params"]
-    classification_module = ClassificationModule(
-        model=classifier,
+    gan_module = GANModule(
+        generator=generator,
+        discriminator=discriminator,
         optimizer_config=optimizer_params,
         num_classes=data_module.num_classes,
-        negative_ratio=(1. / data_module.get_positive_ratio()),
         logs_dir=logger_tb.log_dir,
         ckpts_dir=os.path.join(logger_tb.log_dir, "ckpts"),
     )
@@ -124,7 +123,7 @@ def run(config: dict, data_module, initial_generator: nn.Module=None, initial_di
     trainer_args = config["trainer_args"]
     trainer_args["logger"] = [logger_tb, logger_csv]
     trainer = pl.Trainer(**trainer_args)
-    trainer.fit(classification_module, data_module)
+    trainer.fit(gan_module, data_module)
 
 
 

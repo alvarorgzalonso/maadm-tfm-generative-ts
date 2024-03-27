@@ -55,10 +55,8 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     if initial_classifier is None:
         input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
         conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
-        classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
-        
-        classification_head_params["num_classes"] = data_module.num_classes
-        conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
+
+        # conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
 
         name = f"conv1d_{model_name}"
         print(f"Building classifier {name}...")
@@ -67,11 +65,17 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
 
         model = ModelBuilder.build(name, conv_model_params)
         model = ModelWithInputLayer(model, **input_layer_params)
-        classifier = ModelWithClassificationHead(
-            model,
-            model.output_dim,
-            **classification_head_params,
-        )
+        try:
+            classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
+            classification_head_params["num_classes"] = data_module.num_classes
+            classifier = ModelWithClassificationHead(
+                model,
+                model.output_dim,
+                **classification_head_params,
+            )
+        except Exception as e:
+            print(f"Error: {e}")
+            classifier = model
     else:
         print("Using initial classifier")
         classifier = initial_classifier
@@ -167,11 +171,10 @@ if __name__ == "__main__":
             "default_root_dir": f"out",
             "accelerator": "auto",#"cuda",
     }
-    
-    if "InceptionTime" in configs['model_configs']['model_name']:
+    classifier = None
+    if 0 and "InceptionTime" in configs['model_configs']['model_name']:
         classifier = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
-    else:
-        classifier = None
+        
     run(configs, data_module, classifier)
     
     

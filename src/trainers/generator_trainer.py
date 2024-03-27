@@ -11,12 +11,12 @@ from typing import Sequence
 from callbacks.metrics_logger import MetricsLogger
 
 
-class ClassificationModule(pl.LightningModule):
+class TSGenerationModule(pl.LightningModule):
     """
-    LightningModule for classification tasks.
+    LightningModule for generation tasks.
 
     Args:
-        model: The classification model.
+        model: The generation model.
         optimizer_config: Configuration for the optimizer.
         negative_ratio: Ratio of positive samples in the dataset, to correct imbalance.
     """
@@ -34,6 +34,7 @@ class ClassificationModule(pl.LightningModule):
             "betas": (0.9, 0.999),
             "weight_decay": 0.0,
         }
+    
 
     def __init__(
         self,
@@ -146,7 +147,8 @@ class ClassificationModule(pl.LightningModule):
             tuple: A tuple containing the loss, logits, and labels.
         """
         labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
-        logits = self.model.forward(batch["input"])  # (BATCH_SIZE, num_classes)
+        logits = self.model.forward(batch["input"])  # (BATCH_SIZE, 1)
+
         if self.binary: loss = self.loss_fn(logits, labels, pos_weight=self.pos_weight, weight=self.weight)
         else:       
             loss =  self.loss_fn(logits, labels)
@@ -177,15 +179,15 @@ class ClassificationModule(pl.LightningModule):
 
     def configure_callbacks(self) -> Sequence[Callback] | Callback:
         """
-        Configures and returns a list of callbacks for the classification trainer.
+        Configures and returns a list of callbacks for the generation trainer.
         In this case:
         * ModelCheckpoint: saves the model with the best validation f1 score.
         * EarlyStopping: stops training if the validation f1 score does not improve for 10 epochs.
         * LearningRateMonitor: logs the learning rate at each step.
-        * MetricsLogger: logs the training metrics and classification report at the end of training.
+        * MetricsLogger: logs the training metrics and generation report at the end of training.
 
         Returns:
-            A list of callbacks for the classification trainer.
+            A list of callbacks for the generation trainer.
         """
         return super().configure_callbacks() + [
             ModelCheckpoint(
@@ -200,5 +202,5 @@ class ClassificationModule(pl.LightningModule):
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
-            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "classification_report.txt")),
+            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "generation_report.txt")),
         ]

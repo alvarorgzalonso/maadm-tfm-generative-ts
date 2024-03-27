@@ -35,5 +35,5 @@ class Conv1dModel(nn.Module):
         for layer in self.layers:
             x = layer(x)
             i += 1
-        x = torch.mean(x, dim=-1)  # (...BATCH_SIZE, OUTPUT_DIM)
+        #x = torch.mean(x, dim=-1)  # (...BATCH_SIZE, OUTPUT_DIM)
         return x

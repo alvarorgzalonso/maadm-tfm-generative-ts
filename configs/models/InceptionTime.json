@@ -2,103 +2,81 @@
     "model_name": "InceptionTime",
     "model_params": {
         "input_layer_params": {
-            "input_dim": -1,
+            "input_dim": 1,
             "ff_dim": 256,
-            "dropout_p": 0.1
+            "dropout_p": 0.1,
+            "enable_ff": false
         },
         "conv1d_layers_params": {
-            "output_dim": 1,
+            "output_dim": 10,
             "layer_params": [
                 [
                     "residual_block", 
                     {
                         "layer_params":[
                             [ "inception_block", { 
-                                "in_channels": -1,
-                                "kernel_layer_params": [
-                                    [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 40, "padding": 20 } ],
-                                    [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 20, "padding": 10 } ],
-                                    [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 10, "padding": 4 } ]
-                                ],
-                                "nb_filters": 32,
-                                "bottleneck_channels": 32,
-                                "use_bottleneck": true
+                                "in_channels": 1,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
                             }
                             ],
                             [ "inception_block", { 
-                                    "in_channels": -1,
-                                    "kernel_layer_params": [
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 40, "padding": 20 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 20, "padding": 10 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 10, "padding": 4 } ]
-                                    ],
-                                    "nb_filters": 32,
-                                    "bottleneck_channels": 32,
-                                    "use_bottleneck": true
-                                }
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
                             ],
                             [ "inception_block", { 
-                                    "in_channels": -1,
-                                    "kernel_layer_params": [
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 40, "padding": 20 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 20, "padding": 10 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 10, "padding": 4 } ]
-                                    ],
-                                    "nb_filters": 32,
-                                    "bottleneck_channels": 32,
-                                    "use_bottleneck": true
-                                }
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
                             ]
                         ]
                     }
                 ],
                 [
+                    
                     "residual_block", 
                     {
                         "layer_params":[
                             [ "inception_block", { 
-                                "in_channels": -1,
-                                "kernel_layer_params": [
-                                    [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 40, "padding": 20 } ],
-                                    [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 20, "padding": 10 } ],
-                                    [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 10, "padding": 4 } ]
-                                ],
-                                "nb_filters": 32,
-                                "bottleneck_channels": 32,
-                                "use_bottleneck": true
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
                             }
                             ],
                             [ "inception_block", { 
-                                    "in_channels": -1,
-                                    "kernel_layer_params": [
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 40, "padding": 20 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 20, "padding": 10 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 10, "padding": 4 } ]
-                                    ],
-                                    "nb_filters": 32,
-                                    "bottleneck_channels": 32,
-                                    "use_bottleneck": true
-                                }
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
                             ],
                             [ "inception_block", { 
-                                    "in_channels": -1,
-                                    "kernel_layer_params": [
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 40, "padding": 20 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 20, "padding": 10 } ],
-                                        [ "conv1d", { "in_channels": 256, "out_channels": 32, "kernel_size": 10, "padding": 4 } ]
-                                    ],
-                                    "nb_filters": 32,
-                                    "bottleneck_channels": 32,
-                                    "use_bottleneck": true
-                                }
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
                             ]
                         ]
                     }
                 ],
-                ["max_pool", {"kernel_size": 3, "stride": 1, "padding": 1}],
-                ["conv1d", { "in_channels": 256, "out_channels": 1, "kernel_size": 1, "padding": 0 }],
-                ["batch_norm", {"num_features": -1}],
-                ["relu", {}]
+                ["conv1d", { "in_channels": 128, "out_channels": 128, "kernel_size": 1, "stride": 1, "bias": false}],
+                ["batch_norm", {"num_features": 128}],
+                ["relu", {}],
+                ["adaptive_avg_pool1d", {"output_size": 1}],
+                ["flatten", {}],
+                ["linear", {"in_features": 128, "out_features": 10}]
             ]   
         }
     },

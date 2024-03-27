@@ -11,14 +11,16 @@ from typing import Sequence
 from callbacks.metrics_logger import MetricsLogger
 
 
-class ClassificationModule(pl.LightningModule):
+class GANModule(pl.LightningModule):
     """
-    LightningModule for classification tasks.
+    LightningModule for GAN tasks.
 
     Args:
-        model: The classification model.
+        generator: The generator model.
+        discriminator: The discriminator model.
         optimizer_config: Configuration for the optimizer.
-        negative_ratio: Ratio of positive samples in the dataset, to correct imbalance.
+        logs_dir: The directory to save the logs.
+        ckpts_dir: The directory to save the checkpoints.
     """
 
     @classmethod
@@ -37,10 +39,14 @@ class ClassificationModule(pl.LightningModule):
 
     def __init__(
         self,
-        model,
+        generator,
+        discriminator,
         optimizer_config,
         num_classes,
-        negative_ratio,
+        noise_dim=100,
+        gan_loss_weight=0.5,
+        l2_lambda=0.4,
+        l1_lambda=0.1,
         logs_dir: str = os.path.join("out", "classificator"),
         ckpts_dir: str = os.path.join("out", "classificator_ckpts"),
     ):
@@ -54,90 +60,74 @@ class ClassificationModule(pl.LightningModule):
         self.ckpts_dir = ckpts_dir
         if not os.path.exists(self.ckpts_dir): os.makedirs(self.ckpts_dir)
 
-        self.model = model
-
-        self.binary = num_classes == 2
-        if self.binary:
-            self.f1_score = torchmetrics.F1Score(task="binary")
-            self.loss_fn = F.binary_cross_entropy_with_logits
-            self.pos_weight = torch.tensor(negative_ratio, requires_grad=False)
-            self.weight = torch.tensor(2.0 / (1. + negative_ratio), requires_grad=False)
-        else: 
-            self.f1_score = torchmetrics.F1Score(task="multiclass", num_classes=num_classes, average='macro')
-            self.loss_fn = torch.nn.BCEWithLogitsLoss()
-        
+        self.generator = generator
+        self.discriminator = discriminator
         self.num_classes = num_classes
+        self.noise_dim = noise_dim
+        self.GAN_LOSS_WEIGHT = gan_loss_weight
+        self.L2_LAMBDA = l2_lambda
+        self.L1_LAMBDA = l1_lambda
+    
+    def generator_loss(self, disc_generated_output, gen_output, target):
+        """
+        This function calculates the total loss for the generator.
+
+        Parameters:
+        disc_generated_output (Tensor): The discriminator's prediction on the generated (fake) images
+        gen_output (Tensor): The generated (fake) images
+        target (Tensor): The real images
+
+        Returns:
+        total_gen_loss (Tensor): The total loss for the generator
+        gan_loss (Tensor): The GAN loss for the generator
+        l2_loss (Tensor): The L2 loss for the generator
+        """
+        
+        total_gen_loss = 0  # Initialize the total loss for the generator
+        gan_loss = 0  # Initialize the GAN loss for the generator
+        l2_loss = 0  # Initialize the L2 loss for the generator
+
+        gan_loss = F.binary_cross_entropy_with_logits(torch.ones_like(disc_generated_output), disc_generated_output)
+        
+        l2_loss = torch.reduce_mean(torch.reduce_sum(torch.square(target - gen_output), axis=[1, 2, 3]))
+        l1_loss = torch.reduce_mean(torch.reduce_sum(torch.abs(target - gen_output), axis=[1, 2, 3]))
+        
+        # Calculate the total loss for the generator by adding the GAN loss (multiplied by its corresponding weight) and the L2 loss (multiplied by the regularization parameter)
+        total_gen_loss = self.GAN_LOSS_WEIGHT * gan_loss + self.L2_LAMBDA * l2_loss + self.L1_LAMBDA * l1_loss
+
+        # Return the total loss, GAN loss, and L2 loss for the generator
+        return total_gen_loss, gan_loss, l2_loss, l1_loss
+    
+
+    def discriminator_loss(self, disc_real_output, disc_generated_output):
+        """
+        This function calculates the total loss for the discriminator.
+
+        Parameters:
+        disc_real_output (Tensor): The discriminator's prediction on the real images
+        disc_generated_output (Tensor): The discriminator's prediction on the generated (fake) images
+
+        Returns:
+        total_disc_loss (Tensor): The total loss for the discriminator
+        """
+        
+        total_disc_loss = 0  # Initialize the total loss for the discriminator
+        
+        # Calculate the cross entropy loss for the real images
+        real_loss = F.binary_cross_entropy_with_logits(torch.ones_like(disc_real_output), disc_real_output)
+
+        # Calculate the cross entropy loss for the generated (synthetic) images
+        fake_loss = F.binary_cross_entropy_with_logits(torch.zeros_like(disc_generated_output), disc_generated_output)
+        
+        # Calculate the total loss for the discriminator by adding the losses for the real and generated images
+        total_disc_loss = real_loss + fake_loss
+
+        # Return the total loss for the discriminator
+        return total_disc_loss
 
     def training_step(self, batch):
         """
-        Performs a single training step. Logs the training loss and f1 score.
-
-        Args:
-            batch (dict): A dictionary containing the input batch data.
-            batch_idx (int): The index of the current batch.
-
-        Returns:
-            dict: A dictionary containing the loss, logits, and labels.
-        """
-        loss, logits, labels = self._step(batch)
-        if not self.binary:
-            logits = torch.sigmoid(logits)
-            logits = logits.argmax(dim=1)
-            labels = labels.argmax(dim=1)
-            f1_score = self.f1_score(logits, labels)
-        else:
-            probs = torch.sigmoid(logits)
-            f1_score = self.f1_score(probs, labels)
-
-        self.log_dict(
-            {
-                "train_loss": loss,
-                "train_f1_score": f1_score,
-            },
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-            batch_size=labels.nelement(),
-        )
-        return {"loss": loss, "logits": logits, "labels": labels}
-
-    def validation_step(self, batch):
-        """
-        Performs a single validation step. Logs the validation loss and f1 score.
-
-        Args:
-            batch (dict): A dictionary containing the input batch data.
-            batch_idx (int): The index of the current batch.
-
-        Returns:
-            dict: A dictionary containing the loss, logits, and labels.
-        """
-        loss, logits, labels = self._step(batch)
-        if not self.binary:
-            probs = torch.sigmoid(logits)
-            prediction = probs.argmax(dim=1)
-            labels = labels.argmax(dim=1)
-            f1_score = self.f1_score(prediction, labels)
-        else:
-            prediction = torch.sigmoid(logits)
-            f1_score = self.f1_score(prediction, labels)
-
-        self.log_dict(
-            {
-                "val_loss": loss,
-                "val_f1_score": f1_score,
-            },
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-            batch_size=labels.nelement(),
-        )
-        return {"loss": loss, "logits": logits, "labels": labels}
-
-    def _step(self, batch):
-        """
-        Perform a single step of the training process. This method is used by both
-        `training_step` and `validation_step` to avoid code duplication.
+        Perform a single step of the training process.
 
         Args:
             batch (dict): A dictionary containing the input batch data.
@@ -145,15 +135,41 @@ class ClassificationModule(pl.LightningModule):
         Returns:
             tuple: A tuple containing the loss, logits, and labels.
         """
+        opts = self.configure_optimizers()
+        generator_optimizer = opts["generator_optimizer"]
+        discriminator_optimizer = opts["discriminator_optimizer"]
+
         labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
-        logits = self.model.forward(batch["input"])  # (BATCH_SIZE, 1)
+        noise = torch.randn(labels.shape[0], self.noise_dim)
+        noise = noise.type_as(batch["input"])
 
-        if self.binary: loss = self.loss_fn(logits, labels, pos_weight=self.pos_weight, weight=self.weight)
-        else:       
-            loss =  self.loss_fn(logits, labels)
+        self.toggle_optimizer(generator_optimizer)
+        fake_ts = self.generator(noise)
+        # sample_ts = self.generated_ts[:6]
+        # grid = torchvision.utils.make_grid(sample_ts)
+        # self.logger.experiment.add_image("generated_images", grid, 0)
+        gen_loss, gan_loss, l2_loss, l1_loss = self.generator_loss(disc_generated_output, fake_ts, real_ts)
+        self.log("train_loss", gen_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.manual_backward(gen_loss)
+        generator_optimizer.step()
+        generator_optimizer.zero_grad()
+        self.untoggle_optimizer(generator_optimizer)
 
-        return loss, logits, labels
+        self.toggle_optimizer(discriminator_optimizer)
+        real_ts = batch["input"]
 
+        disc_real_output = self.discriminator(real_ts)
+        disc_generated_output = self.discriminator(fake_ts)
+
+        disc_loss = self.discriminator_loss(disc_real_output, disc_generated_output)
+        self.log("train_loss", disc_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.manual_backward(disc_loss)
+        discriminator_optimizer.step()
+        discriminator_optimizer.zero_grad()
+        self.untoggle_optimizer(discriminator_optimizer)
+
+        return gen_loss, disc_loss, gan_loss, l2_loss, l1_loss
+    
     def configure_optimizers(self):
         """
         Configures the optimizer and learning rate scheduler for the training process.
@@ -161,16 +177,28 @@ class ClassificationModule(pl.LightningModule):
         Returns:
             dict: A dictionary containing the optimizer and learning rate scheduler.
         """
-        optimizer = torch.optim.AdamW(
+        generator_optimizer = torch.optim.AdamW(
             params=self.model.parameters(), **self.optimizer_config
         )
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.75, patience=3
+        generator_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            generator_optimizer, mode="min", factor=0.75, patience=3
+        )
+        discriminator_optimizer = torch.optim.AdamW(
+            params=self.model.parameters(), **self.optimizer_config
+        )
+        discriminator_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            discriminator_optimizer, mode="min", factor=0.75, patience=3
         )
         return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
+            "generator_optimizer": generator_optimizer,
+            "generator_lr_scheduler": {
+                "scheduler": generator_scheduler,
+                "monitor": "train_loss",
+                "interval": "epoch",
+            },
+            "discriminator_optimizer": discriminator_optimizer,
+            "discriminator_lr_scheduler": {
+                "scheduler": discriminator_scheduler,
                 "monitor": "train_loss",
                 "interval": "epoch",
             },

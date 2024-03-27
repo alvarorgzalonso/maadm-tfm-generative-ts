@@ -5,7 +5,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from fastai.data.external import untar_data
-import pprint
 
 from sklearn.preprocessing import OneHotEncoder
 
@@ -35,6 +34,7 @@ class MelbounePedestrianDataset(Dataset):
         self.y = torch.tensor(train_df[0].values)
         self.X = torch.tensor(train_df.iloc[:, 1:].values, dtype=torch.float32).view(n_samples, self.n_channels, self.n_timepoints)
         
+        self.train_df = train_df
         self.scaler_min_max()
 
     def __len__(self):
@@ -149,7 +149,6 @@ class MelbounePedestrianDataModule(pl.LightningDataModule):
             **loader_config,
             "collate_fn": MelbounePedestriancollatorFn(**collator_config),
         }
-        
 
     def train_dataloader(self):
         return DataLoader(

@@ -38,9 +38,16 @@ class Conv1dModelLayerBuilder:
             case "ff":
                 return FeedForwardLayer(**params)
             case "residual_block":
+                print(params)
                 return ResidualBlock(**params)
             case "inception_block":
                 return InceptionBlock(**params)
+            case "adaptive_avg_pool1d":
+                return nn.AdaptiveAvgPool1d(**params)
+            case "flatten":
+                return nn.Flatten()
+            case "linear":
+                return nn.Linear(**params)
             case _:
                 raise ValueError(f"Invalid Conv1dModelLayer name: {name}")
             
@@ -86,8 +93,46 @@ class FeedForwardLayer(nn.Module):
         #x = x.transpose(-1, -2)  # (...BATCH_SIZE, OUT_CHANNELS, SEQ_LEN)
         return x
 
-
 class InceptionBlock(nn.Module):
+    """
+    InceptionModule is a module that implements the Inception module architecture.
+    
+    Args:
+        in_channels (int): Number of input channels.
+        n_filters (int): Number of filters for each convolutional layer.
+        kernel_sizes (list): List of kernel sizes for the convolutional layers.
+        bottleneck_channels (int): Number of channels in the bottleneck layer.
+    """
+    def __init__(self, in_channels, n_filters, kernel_sizes, bottleneck_channels):
+        super(InceptionBlock, self).__init__()
+        self.bottleneck = nn.Conv1d(in_channels, bottleneck_channels, 
+                                    kernel_size=1, bias=False)
+        
+        self.convs = nn.ModuleList()
+        for kernel_size in kernel_sizes:
+            self.convs.append(nn.Conv1d(bottleneck_channels, n_filters, 
+                                        kernel_size, padding='same', bias=False))
+        
+        self.maxpool = nn.MaxPool1d(kernel_size=3, stride=1, padding=1)
+        self.maxpool_conv = nn.Conv1d(bottleneck_channels, n_filters, 
+                                      kernel_size=1, bias=False)
+        
+        self.batchnorm = nn.BatchNorm1d(n_filters * (len(kernel_sizes) + 1))
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.bottleneck(x)
+    
+        conv_outputs = [conv(x) for conv in self.convs]
+        maxpool_output = self.maxpool(x)
+        maxpool_output = self.maxpool_conv(maxpool_output)
+        
+        outputs = torch.cat(conv_outputs + [maxpool_output], 1)
+        outputs = self.batchnorm(outputs)
+        return self.relu(outputs)
+    
+
+class InceptionBlock2(nn.Module):
     def __init__(
             self,
             in_channels: int,
