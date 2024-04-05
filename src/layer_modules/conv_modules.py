@@ -38,7 +38,6 @@ class Conv1dModelLayerBuilder:
             case "ff":
                 return FeedForwardLayer(**params)
             case "residual_block":
-                print(params)
                 return ResidualBlock(**params)
             case "inception_block":
                 return InceptionBlock(**params)
@@ -48,6 +47,8 @@ class Conv1dModelLayerBuilder:
                 return nn.Flatten()
             case "linear":
                 return nn.Linear(**params)
+            case "conv_transpose1d":
+                return nn.ConvTranspose1d(**params)
             case _:
                 raise ValueError(f"Invalid Conv1dModelLayer name: {name}")
             

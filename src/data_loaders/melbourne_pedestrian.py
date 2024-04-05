@@ -64,7 +64,7 @@ class MelbounePedestriancollatorFn:
         X = torch.stack(X)
         y = torch.tensor(y)
         if self.vocab:
-            y = torch.tensor([self.vocab[i.item()] for i in y])
+            y = torch.tensor(np.array([self.vocab[i.item()] for i in y]))
         return {"input": X, "label": y}
     
     

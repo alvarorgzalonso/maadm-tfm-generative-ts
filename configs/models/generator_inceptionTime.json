@@ -1,0 +1,88 @@
+{
+    "model_name": "generator_InceptionTime",
+    "noise_dim": 100,
+    "model_params": {
+        "input_layer_params": {
+            "input_dim": 110,
+            "ff_dim": 256,
+            "output_dim": 128,
+            "dropout_p": 0.1,
+            "enable_ff": true
+        },
+        "conv1d_layers_params": {
+            "output_dim": 24,
+            "layer_params": [
+                [
+                    "residual_block", 
+                    {
+                        "layer_params":[
+                            [ "inception_block", { 
+                                "in_channels": 1,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
+                            ],
+                            [ "inception_block", { 
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
+                            ],
+                            [ "inception_block", { 
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
+                            ]
+                        ]
+                    }
+                ],
+                [
+                    
+                    "residual_block", 
+                    {
+                        "layer_params":[
+                            [ "inception_block", { 
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
+                            ],
+                            [ "inception_block", { 
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
+                            ],
+                            [ "inception_block", { 
+                                    
+                                "in_channels": 128,
+                                "n_filters": 32,
+                                "kernel_sizes": [40, 20, 10],
+                                "bottleneck_channels": 32
+                            }
+                            ]
+                        ]
+                    }
+                ],
+                ["conv1d", { "in_channels": 128, "out_channels": 128, "kernel_size": 1, "stride": 1, "bias": false}],
+                ["batch_norm", {"num_features": 128}],
+                ["relu", {}],
+                ["adaptive_avg_pool1d", {"output_size": 1}],
+                ["flatten", {}],
+                ["linear", {"in_features": 128, "out_features": 24}]
+            ]   
+        }
+    },
+    "optimizer_params": {
+        "lr": 1e-4
+    }
+}

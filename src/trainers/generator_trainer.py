@@ -148,10 +148,10 @@ class TSGenerationModule(pl.LightningModule):
         """
         labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
         logits = self.model.forward(batch["input"])  # (BATCH_SIZE, 1)
-
-        if self.binary: loss = self.loss_fn(logits, labels, pos_weight=self.pos_weight, weight=self.weight)
-        else:       
-            loss =  self.loss_fn(logits, labels)
+        l1_loss = F.l1_loss(logits, labels)
+        l2_loss = F.mse_loss(logits, labels)
+        
+        loss =  self.loss_fn(logits, labels)
 
         return loss, logits, labels
 

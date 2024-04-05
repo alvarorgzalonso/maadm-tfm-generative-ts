@@ -49,7 +49,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     """
     ### Set up configuration
     model_name = config["model_configs"]["model_name"]
-    out_dir = os.path.join('out', config["model_configs"]["ckpt_name"])
+    out_dir = os.path.join('out', config["model_configs"]["out_dir"])
 
     ### Build model
     if initial_classifier is None:
@@ -86,7 +86,7 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     
     if not os.path.exists(logger_tb.log_dir): os.makedirs(logger_tb.log_dir)
     
-    with open(os.path.join(logger_tb.log_dir, f"{config['model_configs']['ckpt_name']}.json"), "w") as file:
+    with open(os.path.join(logger_tb.log_dir, f"{config['model_configs']['out_dir']}.json"), "w") as file:
         config["model"] = str(classifier)
         json.dump(config, file, indent=4)
 
@@ -143,13 +143,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--ckpt-name",
+        "--out-dir",
         type=str,
         help="Name of the checkpoint to save the model to.",
     )
 
     args = parser.parse_args()
-    out_dir = os.path.join('out', args.ckpt_name.replace(".ckpt", ""))
+    out_dir = os.path.join('out', args.out_dir.replace(".ckpt", ""))
     if not os.path.exists(out_dir): os.makedirs(out_dir)
 
     config_file_model = os.path.join('configs', 'models', args.model_config)
@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
     configs = {}
     configs['model_configs'] = parse_config(config_file_model)
-    configs['model_configs']['ckpt_name'] = args.ckpt_name.replace(".ckpt", "")    
+    configs['model_configs']['out_dir'] = args.out_dir.replace(".ckpt", "")    
     configs["trainer_args"] = {
             "max_steps": 20000,
             "enable_checkpointing": True,

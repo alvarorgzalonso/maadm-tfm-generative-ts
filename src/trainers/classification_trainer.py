@@ -146,7 +146,7 @@ class ClassificationModule(pl.LightningModule):
             tuple: A tuple containing the loss, logits, and labels.
         """
         labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
-        logits = self.model.forward(batch["input"])  # (BATCH_SIZE, num_classes)
+        logits = self.model.forward(batch["input"]).float().view(-1, self.num_classes)   # (BATCH_SIZE, num_classes)
         if self.binary: loss = self.loss_fn(logits, labels, pos_weight=self.pos_weight, weight=self.weight)
         else:       
             loss =  self.loss_fn(logits, labels)
@@ -196,7 +196,7 @@ class ClassificationModule(pl.LightningModule):
             ),
             EarlyStopping(
                 monitor="val_f1_score",
-                patience=2,
+                patience=8,
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
