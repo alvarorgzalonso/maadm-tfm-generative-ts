@@ -3,6 +3,7 @@ import os
 import pytorch_lightning as pl
 import torchmetrics
 import numpy as np
+import torch.nn as nn
 
 from torch.nn import functional as F
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping, LearningRateMonitor
@@ -41,7 +42,10 @@ class TSGenerationModule(pl.LightningModule):
         model,
         optimizer_config,
         num_classes,
-        negative_ratio,
+        lr=1e-4,
+        noise_dim=100,
+        l2_lambda=0.5,
+        l1_lambda=0.5,
         logs_dir: str = os.path.join("out", "classificator"),
         ckpts_dir: str = os.path.join("out", "classificator_ckpts"),
     ):
@@ -50,24 +54,47 @@ class TSGenerationModule(pl.LightningModule):
             **self.get_default_optimizer_config(),
             **optimizer_config,
         }
+        self.lr = optimizer_config.get("lr", lr)
+        self.learning_rate = self.lr
         self.logs_dir = logs_dir
         if not os.path.exists(self.logs_dir): os.makedirs(self.logs_dir)
         self.ckpts_dir = ckpts_dir
         if not os.path.exists(self.ckpts_dir): os.makedirs(self.ckpts_dir)
 
-        self.model = model
+        self.noise_dim = noise_dim
+        self.L2_LAMBDA = l2_lambda
+        self.L1_LAMBDA = l1_lambda
 
-        self.binary = num_classes == 2
-        if self.binary:
-            self.f1_score = torchmetrics.F1Score(task="binary")
-            self.loss_fn = F.binary_cross_entropy_with_logits
-            self.pos_weight = torch.tensor(negative_ratio, requires_grad=False)
-            self.weight = torch.tensor(2.0 / (1. + negative_ratio), requires_grad=False)
-        else: 
-            self.f1_score = torchmetrics.F1Score(task="multiclass", num_classes=num_classes, average='macro')
-            self.loss_fn = torch.nn.BCEWithLogitsLoss()
-        
+        self.model = model        
         self.num_classes = num_classes
+        self.criterion_l1 = nn.L1Loss()
+        self.criterion_l2 = nn.MSELoss()
+
+    def loss_fn(self, gen_output, target):
+        """
+        This function calculates the total loss for the generator.
+
+        Parameters:
+        gen_output (Tensor): The generated (fake) images
+        target (Tensor): The real images
+
+        Returns:
+        total_gen_loss (Tensor): The total loss for the generator
+        gan_loss (Tensor): The GAN loss for the generator
+        l2_loss (Tensor): The L2 loss for the generator
+        """
+        
+        total_gen_loss = 0  # Initialize the total loss for the generator
+
+        
+        self.l1_loss = self.criterion_l1(gen_output, target)
+        self.l2_loss = self.criterion_l2(gen_output, target)
+        
+        # Calculate the total loss for the generator by adding the GAN loss (multiplied by its corresponding weight) and the L2 loss (multiplied by the regularization parameter)
+        total_gen_loss = self.L2_LAMBDA * self.l2_loss + self.L1_LAMBDA * self.l1_loss
+
+        # Return the total loss, GAN loss, and L2 loss for the generator
+        return total_gen_loss
 
     def training_step(self, batch):
         """
@@ -81,19 +108,13 @@ class TSGenerationModule(pl.LightningModule):
             dict: A dictionary containing the loss, logits, and labels.
         """
         loss, logits, labels = self._step(batch)
-        if not self.binary:
-            logits = torch.sigmoid(logits)
-            logits = logits.argmax(dim=1)
-            labels = labels.argmax(dim=1)
-            f1_score = self.f1_score(logits, labels)
-        else:
-            probs = torch.sigmoid(logits)
-            f1_score = self.f1_score(probs, labels)
+        
 
         self.log_dict(
             {
                 "train_loss": loss,
-                "train_f1_score": f1_score,
+                "l2_loss": self.l2_loss,
+                "l1_loss": self.l1_loss,
             },
             on_epoch=True,
             on_step=True,
@@ -114,19 +135,12 @@ class TSGenerationModule(pl.LightningModule):
             dict: A dictionary containing the loss, logits, and labels.
         """
         loss, logits, labels = self._step(batch)
-        if not self.binary:
-            probs = torch.sigmoid(logits)
-            prediction = probs.argmax(dim=1)
-            labels = labels.argmax(dim=1)
-            f1_score = self.f1_score(prediction, labels)
-        else:
-            prediction = torch.sigmoid(logits)
-            f1_score = self.f1_score(prediction, labels)
 
         self.log_dict(
             {
                 "val_loss": loss,
-                "val_f1_score": f1_score,
+                "l2_loss": self.l2_loss,
+                "l1_loss": self.l1_loss,
             },
             on_epoch=True,
             on_step=True,
@@ -147,11 +161,16 @@ class TSGenerationModule(pl.LightningModule):
             tuple: A tuple containing the loss, logits, and labels.
         """
         labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
-        logits = self.model.forward(batch["input"])  # (BATCH_SIZE, 1)
-        l1_loss = F.l1_loss(logits, labels)
-        l2_loss = F.mse_loss(logits, labels)
+        target = batch["input"].float().view(-1,batch["input"].shape[1], batch["input"].shape[2])  # (B, C, T)
         
-        loss =  self.loss_fn(logits, labels)
+        noise = torch.randn(labels.shape[0], self.noise_dim)
+        noise = noise.type_as(batch["input"])
+        noise = torch.cat((noise, labels), dim=1)
+        noise = noise.view(-1, 1, self.noise_dim + self.num_classes)
+
+        logits = self.model.forward(noise).view(-1, 1, batch["input"].shape[2])  # (B, C, T)
+        predictions = torch.tanh(logits)
+        loss =  self.loss_fn(predictions, target)
 
         return loss, logits, labels
 
@@ -192,15 +211,14 @@ class TSGenerationModule(pl.LightningModule):
         return super().configure_callbacks() + [
             ModelCheckpoint(
                 dirpath=self.ckpts_dir,
-                filename="{epoch}-{val_f1_score:.2f}",
-                monitor="val_f1_score",
+                filename="{epoch}-{val_loss:.2f}",
+                monitor="val_loss",
                 mode="max",
             ),
             EarlyStopping(
-                monitor="val_f1_score",
-                patience=2,
+                monitor="val_loss",
+                patience=10,
                 mode="max",
             ),
             LearningRateMonitor(logging_interval="step"),
-            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "generation_report.txt")),
         ]

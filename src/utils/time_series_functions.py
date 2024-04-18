@@ -1,5 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
+import json
+import os
+
 
 ## MSM distance
 
@@ -203,19 +206,3 @@ def plot_cluster_with_barycenter(X, barycenter):
     plt.legend()
     plt.grid(True)
     plt.show()
-
-def generate_metadata(df, label_column, c):
-    labels = df[label_column].unique()
-    centers = {k: {} for k in labels}
-
-    for selected_label in labels:
-        selected_label_indices = dataset.train_df.index[dataset.train_df[0] == selected_label].tolist()
-        X = np.array([dataset[i][0].numpy().flatten() for i in selected_label_indices])
-        
-        barycenter = msm_barycenter_average(X, c=c, verbose=False)
-        plot_cluster_with_barycenter(X, barycenter)
-        centers[selected_label] = {"barycenter": barycenter.tolist(), "mean": np.mean(X, axis=0).tolist()}
-
-    # save centers to file
-    with open(os.path.join(output_data_dir, "centers.json"), "w") as file:
-        json.dump(centers, file)

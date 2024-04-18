@@ -41,6 +41,7 @@ class ClassificationModule(pl.LightningModule):
         optimizer_config,
         num_classes,
         negative_ratio,
+        lr=1e-4,
         logs_dir: str = os.path.join("out", "classificator"),
         ckpts_dir: str = os.path.join("out", "classificator_ckpts"),
     ):
@@ -49,6 +50,8 @@ class ClassificationModule(pl.LightningModule):
             **self.get_default_optimizer_config(),
             **optimizer_config,
         }
+        self.lr = optimizer_config.get("lr", lr)
+        self.learning_rate = self.lr
         self.logs_dir = logs_dir
         if not os.path.exists(self.logs_dir): os.makedirs(self.logs_dir)
         self.ckpts_dir = ckpts_dir

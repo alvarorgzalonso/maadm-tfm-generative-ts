@@ -1,8 +1,4 @@
-import torch
-
 from torch import nn
-from typing import Literal
-from models.base_model import BaseModel
 from layer_modules.conv_modules import Conv1dModelLayerBuilder, Conv1dModelLayer
 
 
@@ -32,6 +28,7 @@ class Conv1dModel(nn.Module):
         i = 0
         x = input
         #x = x.transpose(-1, -2)  # (...BATCH_SIZE, SEQ_LEN, IN_CHANNELS)
+        # print(f"\nInput: {x.shape}")
         for layer in self.layers:
             x = layer(x)
             # print(f"Layer {i}: {x.shape}")

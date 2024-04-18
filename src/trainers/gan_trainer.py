@@ -1,15 +1,19 @@
 import torch
 import os
 import pytorch_lightning as pl
-import torchmetrics
-import numpy as np
-
+import torch.nn as nn
 from torch.nn import functional as F
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from typing import Sequence
 
 from callbacks.metrics_logger import MetricsLogger
 
+import sys
+dir_path = os.path.dirname(os.path.abspath(__file__))
+project_src_path = os.path.join(dir_path, "..", "src")
+sys.path.append(project_src_path)
+
+from utils import utils_functions as uf
 
 class GANModule(pl.LightningModule):
     """
@@ -60,7 +64,6 @@ class GANModule(pl.LightningModule):
         self.ckpts_dir = ckpts_dir
         if not os.path.exists(self.ckpts_dir): os.makedirs(self.ckpts_dir)
         
-        self.save_hyperparameters()
         self.automatic_optimization = False
 
         self.generator = generator
@@ -70,6 +73,9 @@ class GANModule(pl.LightningModule):
         self.GAN_LOSS_WEIGHT = gan_loss_weight
         self.L2_LAMBDA = l2_lambda
         self.L1_LAMBDA = l1_lambda
+        self.criterion_l1 = nn.L1Loss()
+        self.criterion_l2 = nn.MSELoss()
+
     
 
     def generator_loss(self, disc_generated_output, gen_output, target):
@@ -93,14 +99,14 @@ class GANModule(pl.LightningModule):
 
         gan_loss = F.binary_cross_entropy_with_logits(torch.ones_like(disc_generated_output), disc_generated_output)
         
-        l2_loss = torch.reduce_mean(torch.reduce_sum(torch.square(target - gen_output), axis=[1, 2, 3]))
-        l1_loss = torch.reduce_mean(torch.reduce_sum(torch.abs(target - gen_output), axis=[1, 2, 3]))
+        l1_loss = self.criterion_l1(gen_output, target)
+        l2_loss = self.criterion_l2(gen_output, target)
         
         # Calculate the total loss for the generator by adding the GAN loss (multiplied by its corresponding weight) and the L2 loss (multiplied by the regularization parameter)
         total_gen_loss = self.GAN_LOSS_WEIGHT * gan_loss + self.L2_LAMBDA * l2_loss + self.L1_LAMBDA * l1_loss
 
         # Return the total loss, GAN loss, and L2 loss for the generator
-        return total_gen_loss, gan_loss, l2_loss, l1_loss
+        return total_gen_loss.clone().detach().requires_grad_(True), gan_loss, l2_loss, l1_loss
     
 
     def discriminator_loss(self, disc_real_output, disc_generated_output):
@@ -127,7 +133,7 @@ class GANModule(pl.LightningModule):
         total_disc_loss = real_loss + fake_loss
 
         # Return the total loss for the discriminator
-        return total_disc_loss
+        return total_disc_loss.clone().detach().requires_grad_(True)
     
 
     def training_step(self, batch):
@@ -140,54 +146,44 @@ class GANModule(pl.LightningModule):
         Returns:
             tuple: A tuple containing the loss, logits, and labels.
         """
+        torch.autograd.set_detect_anomaly(True)
         generator_optimizer, discriminator_optimizer = self.optimizers()
 
         labels = batch["label"].float().view(-1, self.num_classes)  # (BATCH_SIZE, num_classes)
+        target = batch["input"].float().view(-1, batch["input"].shape[1], batch["input"].shape[2])  # (B, C, T)
+
         noise = torch.randn(labels.shape[0], self.noise_dim)
         noise = noise.type_as(batch["input"])
-
-        # concat noise and labels
         noise = torch.cat((noise, labels), dim=1)
-        noise = noise.view(-1, 1, self.noise_dim + self.num_classes) # (B, C, T)
+        noise = noise.view(-1, batch["input"].shape[1], self.noise_dim + self.num_classes) # (B, C, T)
 
-        # concat input and labels
-        real_ts = batch["input"]
+        labels = labels.view(-1, 1, self.num_classes)
+        disc_real_input = torch.cat((target, labels), dim=-1)
 
         ## Generator training ##
         self.toggle_optimizer(generator_optimizer)
-        fake_ts = self.generator(noise)
-        # sample_ts = self.generated_ts[:6]
-        # grid = torchvision.utils.make_grid(sample_ts)
-        # self.logger.experiment.add_image("generated_images", grid, 0)
-        disc_generated_output = self.discriminator( torch.cat((fake_ts, labels), dim=1))
+        self.toggle_optimizer(discriminator_optimizer)
 
-        gen_loss, gan_loss, l2_loss, l1_loss = self.generator_loss(disc_generated_output, fake_ts, real_ts)
-        self.log_dict(
-            {
-                "gen_loss": gen_loss,
-                # "gan_loss": gan_loss,
-                # "l2_loss": l2_loss,
-                # "l1_loss": l1_loss,
-            },
-            on_epoch=True,
-            on_step=True,
-            prog_bar=True,
-            batch_size=labels.nelement(),
-        )
-        self.manual_backward(gen_loss)
+        logits = self.generator.forward(noise).view(-1, 1, batch["input"].shape[2])  # (B, C, T)
+        fake_ts = torch.tanh(logits)
+        fake_disc_input = torch.cat((fake_ts, labels), dim=-1)
+        disc_generated_output = self.discriminator(fake_disc_input)
+
+        gen_loss, gan_loss, l2_loss, l1_loss = self.generator_loss(disc_generated_output, fake_ts, target)
+        self.manual_backward(gen_loss, retain_graph=True)
         generator_optimizer.step()
         generator_optimizer.zero_grad()
         self.untoggle_optimizer(generator_optimizer)
 
-        ## Discriminator training ##
-        self.toggle_optimizer(discriminator_optimizer)
 
-        disc_real_output = self.discriminator( torch.cat((real_ts, labels), dim=1))
-        
+        ## Discriminator training ##
+        disc_real_output = self.discriminator(disc_real_input)
+        disc_real_output = disc_real_output.view(-1, 1)
         disc_loss = self.discriminator_loss(disc_real_output, disc_generated_output)
         self.log_dict(
             {
                 "disc_loss": disc_loss,
+                "gen_loss": gen_loss,
             },
             on_epoch=True,
             on_step=True,
@@ -199,7 +195,7 @@ class GANModule(pl.LightningModule):
         discriminator_optimizer.zero_grad()
         self.untoggle_optimizer(discriminator_optimizer)
 
-        return gen_loss, disc_loss, gan_loss, l2_loss, l1_loss
+        #return gen_loss, disc_loss, gan_loss, l2_loss, l1_loss
     
     def configure_optimizers(self):
         """
@@ -254,15 +250,15 @@ class GANModule(pl.LightningModule):
         return super().configure_callbacks() + [
             ModelCheckpoint(
                 dirpath=self.ckpts_dir,
-                filename="{epoch}-{val_f1_score:.2f}",
-                monitor="val_f1_score",
-                mode="max",
+                filename="{epoch}-{disc_loss:.2f}",
+                monitor="disc_loss",
+                mode="min",
             ),
             EarlyStopping(
-                monitor="val_f1_score",
+                monitor="disc_loss",
                 patience=2,
-                mode="max",
+                mode="min",
             ),
             LearningRateMonitor(logging_interval="step"),
-            MetricsLogger(report_file_path=os.path.join(self.logs_dir, "classification_report.txt")),
+            #MetricsLogger(report_file_path=os.path.join(self.logs_dir, "classification_report.txt")),
         ]

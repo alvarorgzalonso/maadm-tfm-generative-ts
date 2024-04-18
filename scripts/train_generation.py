@@ -9,15 +9,15 @@ from torch import nn
 dir_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(dir_path, "..", "src"))
 sys.path.append(os.path.join(dir_path, "..", "utils"))
+from utils import utils_functions as uf
 
 
+from data_loaders.sine import SineDataModule
 from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
 from models.inceptiontime import InceptionTime
-from trainers.gan_trainer import GANModule
-from layer_modules.classification_head import ModelWithClassificationHead
+from trainers.generation_trainer import TSGenerationModule
 from layer_modules.input_layer import ModelWithInputLayer
-from utils import utils_functions as uf
 
 
 
@@ -36,7 +36,7 @@ def get_data_module(config: dict):
         raise ValueError("Invalid data name")
     
 
-def run(config: dict, data_module, initial_generator: nn.Module=None, initial_discriminator: nn.Module=None):
+def run(config: dict, data_module, initial_generator: nn.Module=None):
     """
     Train the model
     Args:
@@ -48,43 +48,34 @@ def run(config: dict, data_module, initial_generator: nn.Module=None, initial_di
         Model: The finetuned model.
     """
     ### Set up configuration
-    out_dir = config["generator_configs"]["out_dir"]
+    model_name = config["model_configs"]["model_name"]
+    out_dir = os.path.join('out', config["model_configs"]["out_dir"])
 
-    ### Build generator
+    ### Build model
     if initial_generator is None:
-        generator = uf.load_generator(config["generator_configs"], data_module)
+        generator = uf.load_generator(config["model_configs"], data_module)
     else:
-        print("Using initial generator")
         generator = initial_generator
-
-        
-    ### Build discriminator
-    if initial_discriminator is None:
-        discriminator = uf.load_discriminator(config["discriminator_configs"], data_module)
-    else:
-        print("Using initial discriminator")
-        discriminator = initial_discriminator
 
     logger_tb = pl_loggers.TensorBoardLogger(out_dir, name='')
     logger_csv = pl_loggers.CSVLogger(out_dir, name='')
     print(f"Saving to:\nlogger_tb.log_dir: {logger_tb.log_dir}\nlogger_csv.log_dir: {logger_csv.log_dir}")
+    
     if not os.path.exists(logger_tb.log_dir): os.makedirs(logger_tb.log_dir)
     
-    with open(os.path.join(logger_tb.log_dir, f"{os.path.basename(config['generator_configs']['out_dir'])}.json"), "w") as file:
-        config["discriminator"] = str(discriminator)
-        config["generator"]  = str(generator)
+    with open(os.path.join(logger_tb.log_dir, f"{config['model_configs']['out_dir']}.json"), "w") as file:
+        config["model"] = str(generator)
         json.dump(config, file, indent=4)
 
-    optimizer_params = config["generator_configs"]["optimizer_params"]
-    gan_module = GANModule(
-        generator=generator,
-        discriminator=discriminator,
+
+    optimizer_params = config["model_configs"]["optimizer_params"]
+    generation_module = TSGenerationModule(
+        model=generator,
         optimizer_config=optimizer_params,
         num_classes=data_module.num_classes,
-        noise_dim=config["generator_configs"]["noise_dim"],
-        gan_loss_weight=0.5,
-        l2_lambda=0.4,
-        l1_lambda=0.1,
+        noise_dim=config["model_configs"]["noise_dim"],
+        l2_lambda=0.5,
+        l1_lambda=0.5,
         logs_dir=logger_tb.log_dir,
         ckpts_dir=os.path.join(logger_tb.log_dir, "ckpts"),
     )
@@ -92,7 +83,8 @@ def run(config: dict, data_module, initial_generator: nn.Module=None, initial_di
     trainer_args = config["trainer_args"]
     trainer_args["logger"] = [logger_tb, logger_csv]
     trainer = pl.Trainer(**trainer_args)
-    trainer.fit(gan_module, data_module)
+    trainer.fit(generation_module, data_module)
+
 
 
 def parse_config(config_file_name):
@@ -109,26 +101,18 @@ def parse_config(config_file_name):
         print(f"Error: The file '{config_file_name}' is not a valid JSON file.")
         return
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Trainer generative model for time series generation.",
         epilog=(
-            "This tool trains a GAN model to generate time series data by taking original as reference."
+            "This tool trains a time series generator."
         ),
     )
 
     parser.add_argument(
-        "--generator-config",
+        "--model-config",
         type=str,
-        help="Path to the generator configuration file.",
-    )
-
-    parser.add_argument(
-        "--discriminator-config",
-        type=str,
-        help="Path to the discriminator configuration file.",
+        help="Path to the model configuration file.",
     )
 
     parser.add_argument(
@@ -144,36 +128,35 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    out_dir = os.path.join('out', args.out_dir)
+    out_dir = os.path.join('out', args.out_dir.replace(".ckpt", ""))
     if not os.path.exists(out_dir): os.makedirs(out_dir)
 
-    config_file_generator = os.path.join('configs', 'models', args.generator_config)
-    config_file_discriminator = os.path.join('configs', 'models', args.discriminator_config)
+    config_file_model = os.path.join('configs', 'models', args.model_config)
     config_file_data = os.path.join('configs', 'data', args.dataset_config)
     
-    if not os.path.exists(config_file_generator):
-        raise ValueError(f"Please provide a path to the generator configuration file.\n{config_file_generator} not found.")
-    if not os.path.exists(config_file_discriminator):
-        raise ValueError(f"Please provide a path to the discriminator configuration file.\n{config_file_discriminator} not found.")
+    if not os.path.exists(config_file_model):
+        raise ValueError(f"Please provide a path to the model configuration file.\n{config_file_model} not found.")
     if not os.path.exists(config_file_data):
         raise ValueError(f"Please provide a path to the dataset configuration file.\n{config_file_data} not found.")
 
     data_module = get_data_module(parse_config(config_file_data))
 
     configs = {}
-    configs['generator_configs'] = parse_config(config_file_generator)
-    configs['discriminator_configs'] = parse_config(config_file_discriminator)
-    configs['generator_configs']['out_dir'] = out_dir
-    configs['discriminator_configs']['out_dir'] = out_dir
+    configs['model_configs'] = parse_config(config_file_model)
+    configs['model_configs']['out_dir'] = args.out_dir.replace(".ckpt", "")    
     configs["trainer_args"] = {
             "max_steps": 20000,
             "enable_checkpointing": True,
             "default_root_dir": f"out",
             "accelerator": "auto",#"cuda",
     }
+
+    generator = None
+        
+    run(configs, data_module, generator)
     
-    if "InceptionTime" in configs['discriminator_configs']['model_name'] and 0:
-        discriminator = InceptionTime(n_classes = data_module.num_classes, in_channels = data_module.n_channels, kszs=[10, 20, 40])
-    else:
-        discriminator = None
-    run(configs, data_module, initial_discriminator=discriminator)
+    
+
+    
+
+    

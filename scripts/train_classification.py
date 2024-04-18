@@ -7,10 +7,10 @@ from lightning.pytorch import loggers as pl_loggers
 from torch import nn
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
-project_src_path = os.path.join(dir_path, "..", "src")
-sys.path.append(project_src_path)
+sys.path.append(os.path.join(dir_path, "..", "src"))
+sys.path.append(os.path.join(dir_path, "..", "utils"))
 
-
+from utils import utils_functions as uf
 from data_loaders.sine import SineDataModule
 from data_loaders.melbourne_pedestrian import MelbounePedestrianDataModule
 from models.model_builder import ModelBuilder
@@ -52,33 +52,11 @@ def run(config: dict, data_module, initial_classifier: nn.Module=None):
     out_dir = os.path.join('out', config["model_configs"]["out_dir"])
 
     ### Build model
-    if initial_classifier is None:
-        input_layer_params = config["model_configs"]["model_params"]["input_layer_params"]
-        conv_model_params = config["model_configs"]["model_params"]["conv1d_layers_params"]
-
-        # conv_model_params["layer_params"][0][1]["in_channels"] = data_module.n_channels
-
-        name = f"conv1d_{model_name}"
-        print(f"Building classifier {name}...")
-        
-        input_layer_params["input_dim"] = data_module.n_timepoints
-
-        model = ModelBuilder.build(name, conv_model_params)
-        model = ModelWithInputLayer(model, **input_layer_params)
-        try:
-            classification_head_params = config["model_configs"]["model_params"]["classification_head_params"]
-            classification_head_params["num_classes"] = data_module.num_classes
-            classifier = ModelWithClassificationHead(
-                model,
-                model.output_dim,
-                **classification_head_params,
-            )
-        except Exception as e:
-            print(f"Error: {e}")
-            classifier = model
+    if initial_classifier is None:       
+        classifier = uf.load_discriminator(config["model_configs"], data_module)
     else:
-        print("Using initial classifier")
         classifier = initial_classifier
+
 
     logger_tb = pl_loggers.TensorBoardLogger(out_dir, name='')
     logger_csv = pl_loggers.CSVLogger(out_dir, name='')

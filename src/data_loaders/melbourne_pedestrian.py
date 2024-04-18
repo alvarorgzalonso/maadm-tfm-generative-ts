@@ -12,29 +12,20 @@ class MelbounePedestrianDataset(Dataset):
     def __init__(self, split="train", vocab=None):
         self.vocab = vocab
 
-        path = untar_data('https://timeseriesclassification.com/aeon-toolkit/MelbournePedestrian.zip')
-        train_data = os.path.join(str(path), 'MelbournePedestrian_TRAIN.txt')
-        test_data = os.path.join(str(path), 'MelbournePedestrian_TEST.txt')
-        if split == "train":
-            data_path = train_data
-        elif split == "test":
-            data_path = test_data
+        df = self.download_data(split)
 
-        train_df = pd.read_csv(data_path, sep='  ', header=None)
-        train_df[0] = train_df[0] - 1
-
-        n_samples = train_df.shape[0]
+        n_samples = df.shape[0]
         self.n_channels = 1
-        self.n_timepoints = train_df.shape[1] - 1
+        self.n_timepoints = df.shape[1] - 1
 
-        self.uniqiue_labels = train_df[0].unique().tolist()
+        self.unique_labels = df[0].unique().tolist()
         
-        self.num_classes = len(self.uniqiue_labels)
+        self.num_classes = len(self.unique_labels)
 
-        self.y = torch.tensor(train_df[0].values)
-        self.X = torch.tensor(train_df.iloc[:, 1:].values, dtype=torch.float32).view(n_samples, self.n_channels, self.n_timepoints)
+        self.y = torch.tensor(df[0].values)
+        self.X = torch.tensor(df.iloc[:, 1:].values, dtype=torch.float32).view(n_samples, self.n_channels, self.n_timepoints)
         
-        self.train_df = train_df
+        #self.df = df
         self.scaler_min_max()
 
     def __len__(self):
@@ -51,8 +42,28 @@ class MelbounePedestrianDataset(Dataset):
         self.min = self.X.min()
         self.max = self.X.max()
         # scale the training set
-        self.X = (self.X - self.X.min()) / (self.X.max() - self.X.min())
+        self.X = (self.X - self.min) / (self.max - self.min)
         self.X = self.X * 2 - 1
+    
+    def inverse_scaler_min_max(self, X):
+        # inverse the scaling
+        X = (X + 1) / 2
+        X = X * (self.max - self.min) + self.min
+        return X
+    
+    def download_data(self, split):
+        path = untar_data('https://timeseriesclassification.com/aeon-toolkit/MelbournePedestrian.zip')
+        train_data = os.path.join(str(path), 'MelbournePedestrian_TRAIN.txt')
+        test_data = os.path.join(str(path), 'MelbournePedestrian_TEST.txt')
+        if split == "train":
+            data_path = train_data
+        elif split == "test":
+            data_path = test_data
+
+        df = pd.read_csv(data_path, sep='  ', header=None, engine='python')
+        df[0] = df[0] - 1
+        return df
+
 
 class MelbounePedestriancollatorFn:
     def __init__(self, vocab=None):
@@ -76,6 +87,7 @@ class MelbounePedestrianDataModule(pl.LightningDataModule):
             "batch_size": 32,
             "num_workers": 4,
             "pin_memory": True,
+            "persistent_workers": True,
         }
 
     @classmethod
@@ -138,10 +150,10 @@ class MelbounePedestrianDataModule(pl.LightningDataModule):
             **collator_config,
         }
         
-        self.one_hot_encoder = OneHotEncoder(categories=[self.train_dataset.uniqiue_labels], sparse_output=False)
-        one_hot_labels = self.one_hot_encoder.fit_transform(np.array(self.train_dataset.uniqiue_labels).reshape(-1, 1))
+        self.one_hot_encoder = OneHotEncoder(categories=[self.train_dataset.unique_labels], sparse_output=False)
+        one_hot_labels = self.one_hot_encoder.fit_transform(np.array(self.train_dataset.unique_labels).reshape(-1, 1))
 
-        collator_config["vocab"] = {v: one_hot_labels[i] for i, v in enumerate(self.train_dataset.uniqiue_labels)}
+        collator_config["vocab"] = {v: one_hot_labels[i] for i, v in enumerate(self.train_dataset.unique_labels)}
 
         # build collator_fn
         self.loader_config = {
